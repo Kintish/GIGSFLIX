@@ -251,7 +251,10 @@ const DB_STORE = "movies";
 const SUPABASE_URL = "https://lpyimytnzilipwtdjiok.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uUS65L2jiv0ewY_YL-eRDQ_GN1Jh2ht";
 const SUPABASE_BUCKET = "gigsflix-media";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabase = null;
+if (window.supabase && typeof window.supabase.createClient === "function") {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
 let movies = JSON.parse(localStorage.getItem("gigsflix_movies") || "[]");
 let isAdmin = false;
 
@@ -260,18 +263,27 @@ function closeWelcomeIntro() {
     welcomeIntro.classList.add("hidden");
 }
 
-if (!sessionStorage.getItem("gigsflix_welcome_seen") && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    sessionStorage.setItem("gigsflix_welcome_seen", "true");
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (!prefersReducedMotion) {
     window.setTimeout(closeWelcomeIntro, 3000);
 } else {
     closeWelcomeIntro();
 }
+window.setTimeout(closeWelcomeIntro, 5000);
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeWelcomeIntro();
+});
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
 }
 
 async function loadPublicMovies() {
+    if (!supabase) {
+        console.warn("Supabase library is unavailable; using local movies.");
+        return;
+    }
+
     const { data, error } = await supabase
         .from("movies")
         .select("*")
@@ -303,6 +315,8 @@ async function loadPublicMovies() {
 }
 
 async function publishMovie(movie, posterFile, videoFile) {
+    if (!supabase) throw new Error("The Supabase library could not be loaded.");
+
     const folder = `${Date.now()}-${crypto.randomUUID().replaceAll("-", "")}`;
     const posterExtension = posterFile.name.includes(".") ? posterFile.name.split(".").pop().toLowerCase() : "jpg";
     const videoExtension = videoFile.name.includes(".") ? videoFile.name.split(".").pop().toLowerCase() : "mp4";
@@ -343,6 +357,8 @@ async function publishMovie(movie, posterFile, videoFile) {
 }
 
 async function unpublishMovie(movie) {
+    if (!supabase) return;
+
     const paths = [];
     if (movie.posterPath) paths.push(movie.posterPath);
     if (movie.videoPath) paths.push(movie.videoPath);
