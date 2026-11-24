@@ -41,6 +41,8 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 .admin-movie { background: #292929; padding: 12px; border-radius: 5px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .delete { background: #b00000; color: white; }
 #player { width: 100%; max-height: 65vh; background: black; }
+#playerFrame { display: none; width: 100%; aspect-ratio: 16 / 9; border: none; background: black; }
+#playerError { display: none; color: #ff7777; margin-top: 12px; }
 .player-title { margin: 15px 0; }
 @media(max-width:600px) {
     .hero h1 { font-size: 32px; }
@@ -110,7 +112,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
             <input type="text" id="movieTitle" placeholder="Movie title" required>
             <textarea id="movieDescription" placeholder="Movie description" required></textarea>
             <input type="url" id="moviePoster" placeholder="Movie poster image URL" required>
-            <input type="url" id="movieVideo" placeholder="Movie video URL (MP4)" required>
+            <input type="url" id="movieVideo" placeholder="Video URL (MP4, WebM, YouTube or Vimeo)" required>
             <select id="movieGenre" required>
                 <option value="">Select movie category</option>
                 <option>Action</option>
@@ -136,6 +138,8 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     <div class="modal-content" style="max-width:850px">
         <button class="close" type="button" onclick="closePlayer()">&times;</button>
         <video id="player" controls playsinline></video>
+        <iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+        <p id="playerError"></p>
         <h2 class="player-title" id="playerTitle"></h2>
         <p id="playerDescription" style="color:#aaa"></p>
     </div>
@@ -296,25 +300,84 @@ function deleteMovie(id) {
     }
 }
 
+function getEmbedUrl(url) {
+    try {
+        const parsed = new URL(url);
+        let videoId = "";
+
+        if (parsed.hostname.includes("youtube.com")) {
+            videoId = parsed.searchParams.get("v") || parsed.pathname.split("/").filter(Boolean).pop();
+        } else if (parsed.hostname === "youtu.be") {
+            videoId = parsed.pathname.slice(1).split("/")[0];
+        }
+
+        if (videoId) {
+            return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&rel=0`;
+        }
+
+        if (parsed.hostname.includes("vimeo.com") || parsed.hostname.includes("player.vimeo.com")) {
+            const videoId = parsed.pathname.split("/").filter(Boolean).pop();
+            if (/^\d+$/.test(videoId)) {
+                return `https://player.vimeo.com/video/${videoId}?autoplay=1`;
+            }
+        }
+    } catch (_) {}
+
+    return null;
+}
+
 function playMovie(id) {
     const movie = movies.find(m => m.id === id);
     if (!movie) return;
 
     const player = document.getElementById("player");
+    const playerFrame = document.getElementById("playerFrame");
+    const playerError = document.getElementById("playerError");
+
     document.getElementById("playerTitle").textContent = movie.title;
     document.getElementById("playerDescription").textContent = movie.description;
-    player.src = movie.video;
+    playerError.style.display = "none";
+
+    const embedUrl = getEmbedUrl(movie.video);
+
+    if (embedUrl) {
+        player.pause();
+        player.removeAttribute("src");
+        player.load();
+        player.style.display = "none";
+        playerFrame.src = embedUrl;
+        playerFrame.style.display = "block";
+    } else {
+        playerFrame.removeAttribute("src");
+        playerFrame.style.display = "none";
+        player.style.display = "block";
+        player.src = movie.video;
+        player.load();
+        player.play().catch(() => {});
+    }
+
     document.getElementById("videoModal").style.display = "block";
-    player.play().catch(() => {});
 }
 
 function closePlayer() {
     const player = document.getElementById("player");
+    const playerFrame = document.getElementById("playerFrame");
+
     player.pause();
     player.removeAttribute("src");
     player.load();
+    playerFrame.removeAttribute("src");
+    document.getElementById("playerError").style.display = "none";
     closeModal("videoModal");
 }
+
+const player = document.getElementById("player");
+player.addEventListener("error", () => {
+    if (!player.currentSrc) return;
+    const playerError = document.getElementById("playerError");
+    playerError.textContent = "This video could not be played. Use a direct MP4/WebM file URL or a public YouTube/Vimeo link.";
+    playerError.style.display = "block";
+});
 
 renderMovies();
 </script>
