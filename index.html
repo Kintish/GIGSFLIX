@@ -149,6 +149,9 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
         <h2>ADMIN DASHBOARD</h2>
         <p style="color:#aaa;margin-bottom:20px">Manage your GIGSFLIX movie collection.</p>
         <h3 style="margin-bottom:15px">Add New Movie</h3>
+        <label for="githubToken">GitHub publish token</label>
+        <input type="password" id="githubToken" placeholder="Fine-grained token for this repository" autocomplete="off" required>
+        <p style="color:#888;font-size:12px;margin:-8px 0 14px">Used only in this browser session to publish public files.</p>
         <form onsubmit="addMovie(event)">
             <input type="text" id="movieTitle" placeholder="Movie title" required>
             <textarea id="movieDescription" placeholder="Movie description" required></textarea>
@@ -209,6 +212,113 @@ if (!sessionStorage.getItem("gigsflix_welcome_seen") && !window.matchMedia("(pre
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
+}
+
+const GITHUB_OWNER = "Kintish";
+const GITHUB_REPO = "GIGSFLIX";
+const GITHUB_PAGES_URL = "https://kintish.github.io/GIGSFLIX/";
+
+function fileExtension(file) {
+    const nameExtension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+    return nameExtension ? `.${nameExtension}` : "";
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
+function utf8ToBase64(value) {
+    return btoa(unescape(encodeURIComponent(value)));
+}
+
+async function getRepositoryFile(path, token) {
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" }
+    });
+
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
+    return response.json();
+}
+
+async function putRepositoryFile(path, contentBase64, token, message) {
+    const existing = await getRepositoryFile(path, token);
+    const body = { message, content: contentBase64 };
+    if (existing) body.sha = existing.sha;
+
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`, {
+        method: "PUT",
+        headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || `GitHub returned ${response.status}`);
+    }
+}
+
+async function publishMovieToGitHub(movie, posterFile, videoFile, token) {
+    const posterExtension = fileExtension(posterFile);
+    const videoExtension = fileExtension(videoFile);
+    const posterPath = `assets/movies/${movie.id}/poster${posterExtension}`;
+    const videoPath = `assets/movies/${movie.id}/video${videoExtension}`;
+
+    await putRepositoryFile(posterPath, await fileToBase64(posterFile), token, `Add poster for ${movie.title}`);
+    await putRepositoryFile(videoPath, await fileToBase64(videoFile), token, `Add video for ${movie.title}`);
+
+    const publicMovie = {
+        id: movie.id,
+        title: movie.title,
+        description: movie.description,
+        genre: movie.genre,
+        poster: GITHUB_PAGES_URL + posterPath,
+        video: GITHUB_PAGES_URL + videoPath
+    };
+
+    const catalogFile = await getRepositoryFile("movies.json", token);
+    let publicMovies = [];
+    if (catalogFile && catalogFile.content) {
+        publicMovies = JSON.parse(decodeURIComponent(escape(atob(catalogFile.content.replace(/\n/g, "")))));
+    }
+
+    publicMovies = publicMovies.filter(item => item.id !== publicMovie.id);
+    publicMovies.unshift(publicMovie);
+
+    await putRepositoryFile(
+        "movies.json",
+        utf8ToBase64(JSON.stringify(publicMovies, null, 2)),
+        token,
+        `Publish ${movie.title}`
+    );
+
+    return publicMovie;
+}
+
+async function loadPublicMovies() {
+    try {
+        const response = await fetch(`${GITHUB_PAGES_URL}movies.json?cache=${Date.now()}`);
+        if (!response.ok) return;
+
+        const publicMovies = await response.json();
+        if (!Array.isArray(publicMovies)) return;
+
+        for (const publicMovie of publicMovies) {
+            if (!movies.some(movie => String(movie.id) === String(publicMovie.id))) {
+                movies.push(publicMovie);
+            }
+        }
+        saveMovies();
+    } catch (_) {}
 }
 
 function openMediaDatabase() {
@@ -306,6 +416,12 @@ async function addMovie(event) {
         return;
     }
 
+    const token = document.getElementById("githubToken").value.trim();
+    if (!token) {
+        alert("Enter a fine-grained GitHub publish token for the GIGSFLIX repository.");
+        return;
+    }
+
     if (!posterFile.type.startsWith("image/")) {
         alert("The poster must be an image file.");
         return;
@@ -322,29 +438,33 @@ async function addMovie(event) {
 
     try {
         const id = Date.now();
-        await saveMedia(id, posterFile, videoFile);
 
-        const movie = {
+        const publicMovie = await publishMovieToGitHub({
             id,
             title,
             description,
-            poster: null,
-            video: null,
-            posterBlob: true,
-            videoBlob: true,
             genre
+        }, posterFile, videoFile, token);
+
+        await saveMedia(id, posterFile, videoFile);
+
+        const movie = {
+            ...publicMovie,
+            posterBlob: false,
+            videoBlob: false
         };
 
         movies.unshift(movie);
         saveMovies();
         event.target.reset();
+        document.getElementById("githubToken").value = "";
         await renderMovies();
         await renderAnimationMovies();
         renderAdminMovies();
         alert("Movie successfully added to GIGSFLIX!");
     } catch (error) {
         console.error(error);
-        alert("The movie could not be stored. The video or browser storage may be too large.");
+        alert("The movie could not be published. Check the GitHub token permissions and that the poster/video size is within repository limits.");
     } finally {
         submitButton.disabled = false;
         submitButton.textContent = "+ ADD MOVIE";
@@ -529,8 +649,10 @@ player.addEventListener("error", () => {
     playerError.style.display = "block";
 });
 
-renderMovies();
-renderAnimationMovies();
+loadPublicMovies().finally(() => {
+    renderMovies();
+    renderAnimationMovies();
+});
 </script>
 </body>
 </html>
