@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GIGSFLIX - Watch Movies</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -247,6 +248,10 @@ document.addEventListener("click", event => {
 const ADMIN_PASSWORD = "3327";
 const DB_NAME = "gigsflix_media";
 const DB_STORE = "movies";
+const SUPABASE_URL = "https://lpyimytnzilipwtdjiok.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_uUS65L2jiv0ewY_YL-eRDQ_GN1Jh2ht";
+const SUPABASE_BUCKET = "gigsflix-media";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let movies = JSON.parse(localStorage.getItem("gigsflix_movies") || "[]");
 let isAdmin = false;
 
@@ -264,6 +269,89 @@ if (!sessionStorage.getItem("gigsflix_welcome_seen") && !window.matchMedia("(pre
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
+}
+
+async function loadPublicMovies() {
+    const { data, error } = await supabase
+        .from("movies")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        console.warn("Supabase movies could not be loaded:", error.message);
+        return;
+    }
+
+    const publicMovies = (data || []).map(movie => ({
+        id: movie.id,
+        title: movie.title,
+        description: movie.description,
+        genre: movie.genre,
+        allowRatings: movie.allow_ratings,
+        poster: movie.poster_url,
+        video: movie.video_url,
+        posterBlob: false,
+        videoBlob: false,
+        posterPath: movie.poster_path,
+        videoPath: movie.video_path
+    }));
+
+    if (publicMovies.length) {
+        movies = publicMovies;
+        saveMovies();
+    }
+}
+
+async function publishMovie(movie, posterFile, videoFile) {
+    const folder = `${Date.now()}-${crypto.randomUUID().replaceAll("-", "")}`;
+    const posterExtension = posterFile.name.includes(".") ? posterFile.name.split(".").pop().toLowerCase() : "jpg";
+    const videoExtension = videoFile.name.includes(".") ? videoFile.name.split(".").pop().toLowerCase() : "mp4";
+    const posterPath = `${folder}/poster.${posterExtension}`;
+    const videoPath = `${folder}/video.${videoExtension}`;
+
+    const posterUpload = await supabase.storage.from(SUPABASE_BUCKET).upload(posterPath, posterFile, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: posterFile.type
+    });
+    if (posterUpload.error) throw posterUpload.error;
+
+    const videoUpload = await supabase.storage.from(SUPABASE_BUCKET).upload(videoPath, videoFile, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: videoFile.type
+    });
+    if (videoUpload.error) throw videoUpload.error;
+
+    const posterUrl = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(posterPath).data.publicUrl;
+    const videoUrl = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(videoPath).data.publicUrl;
+
+    const { error: insertError } = await supabase.from("movies").insert({
+        id: movie.id,
+        title: movie.title,
+        description: movie.description,
+        genre: movie.genre,
+        allow_ratings: movie.allowRatings,
+        poster_url: posterUrl,
+        video_url: videoUrl,
+        poster_path: posterPath,
+        video_path: videoPath
+    });
+    if (insertError) throw insertError;
+
+    return { poster: posterUrl, video: videoUrl, posterPath, videoPath };
+}
+
+async function unpublishMovie(movie) {
+    const paths = [];
+    if (movie.posterPath) paths.push(movie.posterPath);
+    if (movie.videoPath) paths.push(movie.videoPath);
+
+    if (paths.length) {
+        await supabase.storage.from(SUPABASE_BUCKET).remove(paths);
+    }
+
+    await supabase.from("movies").delete().eq("id", String(movie.id));
 }
 
 function openMediaDatabase() {
@@ -421,19 +509,23 @@ async function addMovie(event) {
         const resizedPoster = await resizePosterFile(posterFile, qualityHeight);
         await validateVideoFile(videoFile);
 
-        await saveMedia(id, resizedPoster, videoFile);
-
         const movie = {
-            id,
+            id: String(id),
             title,
             description,
             poster: null,
             video: null,
-            posterBlob: true,
-            videoBlob: true,
+            posterBlob: false,
+            videoBlob: false,
             genre,
             allowRatings: document.getElementById("movieAllowRatings").checked
         };
+
+        submitButton.textContent = "UPLOADING PUBLICLY...";
+        const publicMedia = await publishMovie(movie, resizedPoster, videoFile);
+        Object.assign(movie, publicMedia);
+
+        await saveMedia(movie.id, resizedPoster, videoFile);
 
         movies.unshift(movie);
         saveMovies();
@@ -444,7 +536,11 @@ async function addMovie(event) {
         alert("Movie successfully added to GIGSFLIX!");
     } catch (error) {
         console.error(error);
-        alert("The movie could not be stored. The video or browser storage may be too large.");
+        if (error.message && error.message.includes("Bucket not found")) {
+            alert("Supabase setup is incomplete. Run supabase_setup.sql in the Supabase SQL Editor first.");
+        } else {
+            alert("The movie could not be published publicly. " + (error.message || "Check Supabase Storage and database setup."));
+        }
     } finally {
         submitButton.disabled = false;
         submitButton.textContent = "+ ADD MOVIE";
@@ -635,8 +731,10 @@ async function deleteMovie(id) {
     if (!isAdmin) return;
 
     if (confirm("Are you sure you want to delete this movie?")) {
+        const movie = movies.find(item => String(item.id) === String(id));
+        if (movie) await unpublishMovie(movie);
         await deleteMedia(id);
-        movies = movies.filter(movie => movie.id !== id);
+        movies = movies.filter(movie => String(movie.id) !== String(id));
         saveMovies();
         await renderMovies();
         await renderAnimationMovies();
@@ -707,8 +805,10 @@ player.addEventListener("error", () => {
     playerError.style.display = "block";
 });
 
-renderMovies();
-renderAnimationMovies();
+loadPublicMovies().finally(() => {
+    renderMovies();
+    renderAnimationMovies();
+});
 </script>
 </body>
 </html>
