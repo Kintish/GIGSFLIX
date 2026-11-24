@@ -4,38 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GIGSFLIX - Watch Movies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { min-height: 100vh; background: #080808; color: white; font-family: Arial, sans-serif; }
+body { min-height: 100vh; background: #080808; color: white; font-family: "DM Sans", "Trebuchet MS", sans-serif; }
 body::before { content: ""; position: fixed; z-index: -2; inset: 0; background: url("assets/movie-set.jpg") center 58% / cover no-repeat; }
 body::after { content: ""; position: fixed; z-index: -1; inset: 0; background: linear-gradient(180deg, rgba(5,5,5,.72), rgba(5,5,5,.88) 58%, #080808 100%); }
 header { background: rgba(10,10,10,.88); backdrop-filter: blur(14px); padding: 18px 5%; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid rgba(255,255,255,.09); }
-.logo { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 30px; font-weight: 900; letter-spacing: 1px; }
+.logo { display: flex; align-items: center; gap: 9px; color: #fff; font-family: "Bebas Neue", Impact, sans-serif; font-size: 34px; line-height: 1; font-weight: 400; letter-spacing: 2px; }
 .logo-mark { width: 38px; height: 38px; display: grid; place-items: center; background: #e50914; border-radius: 8px 8px 8px 2px; box-shadow: 0 8px 24px rgba(229, 9, 20, .28); }
 .logo-mark::before { content: ""; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 12px solid white; margin-left: 3px; }
 .logo-accent { color: #e50914; }
 nav { display: flex; align-items: center; gap: 20px; }
-nav a { color: white; text-decoration: none; cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; }
+nav a { color: white; text-decoration: none; cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 700; }
 nav button { min-height: 44px; }
-button { cursor: pointer; border: none; border-radius: 5px; padding: 10px 17px; min-height: 44px; font-weight: bold; }
+button { cursor: pointer; border: none; border-radius: 5px; padding: 10px 17px; min-height: 44px; font-family: "DM Sans", sans-serif; font-weight: 700; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid rgba(229,9,20,.75); outline-offset: 3px; }
 .red { background: #e50914; color: white; }
 .red:hover { background: #b80710; }
 .hero { min-height: 360px; padding: 80px 7%; background: linear-gradient(90deg, rgba(8,8,8,.96) 0%, rgba(8,8,8,.78) 48%, rgba(8,8,8,.18) 100%), url("assets/movie-set.jpg") center 58% / cover no-repeat; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid rgba(255,255,255,.06); }
 .hero h1, .hero p, .hero button { text-shadow: 0 3px 18px rgba(0,0,0,.65); }
-.hero h1 { font-size: 45px; margin-bottom: 15px; }
-.hero p { color: #bbb; font-size: 17px; margin-bottom: 22px; }
+.hero h1 { max-width: 760px; font-family: "Bebas Neue", Impact, sans-serif; font-size: clamp(52px, 7vw, 92px); line-height: .92; letter-spacing: 1px; margin-bottom: 18px; }
+.hero p { color: #ddd; font-size: 18px; font-weight: 500; margin-bottom: 24px; }
 .section { max-width: 1440px; width: 100%; margin: 0 auto; padding: 30px 5%; }
-.section h2 { margin-bottom: 20px; }
+.section h2 { position: relative; width: fit-content; margin-bottom: 22px; font-family: "Bebas Neue", Impact, sans-serif; font-size: clamp(30px, 4vw, 42px); line-height: 1; font-weight: 400; letter-spacing: 1.5px; }
+.section h2::after { content: ""; position: absolute; left: 0; bottom: -8px; width: 46px; height: 3px; background: #e50914; }
 .search { width: 100%; max-width: 400px; padding: 13px; background: #202020; border: 1px solid #444; border-radius: 5px; color: white; margin-bottom: 25px; font-size: 15px; }
 .movies { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
 .movie { background: #171717; border-radius: 8px; overflow: hidden; transition: .3s; cursor: pointer; }
 .movie:hover { transform: translateY(-4px); }
 .movie img { width: 100%; height: 230px; object-fit: cover; background: #252525; }
 .movie-info { padding: 12px; }
-.movie-info h3 { font-size: 15px; margin-bottom: 7px; }
+.movie-info h3 { font-family: "DM Sans", sans-serif; font-size: 16px; line-height: 1.25; margin-bottom: 7px; }
 .movie-info p { font-size: 12px; color: #aaa; }
 .empty { color: #888; padding: 50px 10px; text-align: center; grid-column: 1 / -1; background: #151515; border-radius: 8px; }
 footer { background: #111; padding: 30px; text-align: center; color: #888; margin-top: 60px; }
@@ -67,9 +71,9 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 .welcome-logo { display: inline-grid; grid-template-columns: 74px auto; align-items: center; gap: 16px; margin-bottom: 16px; }
 .welcome-play { width: 74px; height: 74px; display: grid; place-items: center; border-radius: 16px 16px 16px 5px; background: #e50914; box-shadow: 0 18px 50px rgba(229, 9, 20, .38); animation: logoPop .9s cubic-bezier(.2,.8,.2,1) both; }
 .welcome-play::before { content: ""; width: 0; height: 0; border-top: 16px solid transparent; border-bottom: 16px solid transparent; border-left: 24px solid white; margin-left: 5px; }
-.welcome-name { font-size: clamp(38px, 9vw, 72px); font-weight: 900; line-height: 1; letter-spacing: 1px; }
+.welcome-name { font-family: "Bebas Neue", Impact, sans-serif; font-size: clamp(48px, 9vw, 82px); font-weight: 400; line-height: 1; letter-spacing: 3px; }
 .welcome-name span { color: #e50914; }
-.welcome-tagline { color: #d2d2d2; font-size: clamp(16px, 3vw, 24px); margin-top: 18px; letter-spacing: .5px; }
+.welcome-tagline { color: #d2d2d2; font-family: "DM Sans", sans-serif; font-size: clamp(16px, 3vw, 24px); font-weight: 600; margin-top: 18px; letter-spacing: .2px; }
 .welcome-line { width: 0; height: 3px; margin: 28px auto 0; background: #e50914; animation: welcomeLine 1.2s .35s ease forwards; }
 @keyframes welcomeSlideIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes welcomeRise { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -98,9 +102,9 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     .admin-movie span { min-width: 0; overflow-wrap: anywhere; }
     .admin-movie .delete { flex: 0 0 auto; }
     .hero { min-height: 310px; background-position: 58% center; }
-    .hero h1 { font-size: 32px; }
+    .hero h1 { font-size: clamp(42px, 14vw, 58px); }
     header { padding: 15px; }
-    .logo { font-size: 23px; }
+    .logo { font-size: 27px; }
     .logo-mark { width: 32px; height: 32px; }
     .welcome-logo { grid-template-columns: 58px auto; gap: 12px; }
     .welcome-play { width: 58px; height: 58px; }
