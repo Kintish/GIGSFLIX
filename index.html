@@ -364,82 +364,24 @@ async function resizePosterFile(posterFile, qualityHeight) {
     });
 }
 
-async function resizeVideoFile(videoFile, qualityHeight, onStatus) {
-    if (!HTMLCanvasElement.prototype.captureStream || typeof MediaRecorder === "undefined") {
-        return videoFile;
-    }
+async function validateVideoFile(videoFile) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(videoFile);
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.muted = true;
+        video.playsInline = true;
 
-    const url = URL.createObjectURL(videoFile);
-    const video = document.createElement("video");
-    video.muted = false;
-    video.playsInline = true;
-    video.preload = "metadata";
-
-    try {
-        await new Promise((resolve, reject) => {
-            video.onloadedmetadata = resolve;
-            video.onerror = () => reject(new Error("Video metadata could not be read"));
-            video.src = url;
-        });
-
-        if (!video.videoWidth || !video.videoHeight) return videoFile;
-
-        const targetHeight = Math.min(Number(qualityHeight), video.videoHeight);
-        const targetWidth = Math.max(2, Math.round(video.videoWidth * (targetHeight / video.videoHeight)));
-        const evenWidth = targetWidth % 2 ? targetWidth - 1 : targetWidth;
-        const evenHeight = targetHeight % 2 ? targetHeight - 1 : targetHeight;
-
-        const canvas = document.createElement("canvas");
-        canvas.width = evenWidth;
-        canvas.height = evenHeight;
-        const context = canvas.getContext("2d", { alpha: false });
-
-        const canvasStream = canvas.captureStream(30);
-        const sourceStream = video.captureStream ? video.captureStream() : null;
-        const audioTracks = sourceStream ? sourceStream.getAudioTracks() : [];
-        audioTracks.forEach(track => canvasStream.addTrack(track));
-
-        const mimeTypes = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
-        const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || "";
-        const recorder = new MediaRecorder(canvasStream, mimeType ? { mimeType, videoBitsPerSecond: 4_000_000 } : {});
-        const chunks = [];
-        recorder.ondataavailable = event => {
-            if (event.data.size) chunks.push(event.data);
+        video.onloadeddata = () => {
+            URL.revokeObjectURL(url);
+            resolve(true);
         };
-
-        const completed = new Promise((resolve, reject) => {
-            recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType || "video/webm" }));
-            recorder.onerror = event => reject(event.error || new Error("Video encoding failed"));
-        });
-
-        recorder.start(1000);
-        await video.play();
-
-        const drawFrame = () => {
-            context.drawImage(video, 0, 0, evenWidth, evenHeight);
-            if (!video.ended && !video.paused) requestAnimationFrame(drawFrame);
+        video.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("This video format could not be decoded by the browser."));
         };
-        drawFrame();
-
-        await new Promise((resolve, reject) => {
-            video.onended = resolve;
-            video.onerror = () => reject(new Error("Video processing failed"));
-        });
-
-        recorder.stop();
-        const outputBlob = await completed;
-        if (!outputBlob.size) return videoFile;
-
-        onStatus(`Preparing ${qualityHeight}p video...`);
-        return new File([outputBlob], `${videoFile.name.replace(/\.[^.]+$/, "")}-${qualityHeight}p.webm`, {
-            type: "video/webm"
-        });
-    } catch (error) {
-        console.warn(error);
-        return videoFile;
-    } finally {
-        URL.revokeObjectURL(url);
-    }
+        video.src = url;
+    });
 }
 
 async function addMovie(event) {
@@ -475,13 +417,11 @@ async function addMovie(event) {
         const id = Date.now();
         const qualityHeight = Number(document.getElementById("movieQuality").value);
 
-        submitButton.textContent = `PREPARING ${qualityHeight}p...`;
+        submitButton.textContent = `CHECKING ${qualityHeight}p SOURCE...`;
         const resizedPoster = await resizePosterFile(posterFile, qualityHeight);
-        const resizedVideo = await resizeVideoFile(videoFile, qualityHeight, message => {
-            submitButton.textContent = message;
-        });
+        await validateVideoFile(videoFile);
 
-        await saveMedia(id, resizedPoster, resizedVideo);
+        await saveMedia(id, resizedPoster, videoFile);
 
         const movie = {
             id,
@@ -734,10 +674,18 @@ async function playMovie(id) {
         return;
     }
 
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
     player.src = source;
     document.getElementById("videoModal").style.display = "block";
     player.load();
-    player.play().catch(() => {});
+
+    player.play().catch(() => {
+        player.controls = true;
+        playerError.textContent = "Press the play button to start this movie.";
+        playerError.style.display = "block";
+    });
 }
 
 function closePlayer() {
