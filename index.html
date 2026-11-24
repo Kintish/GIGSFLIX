@@ -513,10 +513,11 @@ async function addMovie(event) {
             allowRatings: document.getElementById("movieAllowRatings").checked
         };
 
-        movie.poster = null;
-        movie.video = null;
-        movie.posterBlob = true;
-        movie.videoBlob = true;
+        submitButton.textContent = `UPLOADING ${qualityHeight}p PUBLICLY...`;
+        const publicMedia = await publishMovie(movie, resizedPoster, videoFile);
+        Object.assign(movie, publicMedia);
+        movie.posterBlob = false;
+        movie.videoBlob = false;
 
         await saveMedia(movie.id, resizedPoster, videoFile);
 
@@ -529,7 +530,7 @@ async function addMovie(event) {
         alert("Movie successfully added to GIGSFLIX!");
     } catch (error) {
         console.error(error);
-        alert("The movie could not be stored on this device. " + (error.message || "The browser storage may be full."));
+        alert("The movie could not be published publicly. " + (error.message || "Check Supabase Storage and database setup."));
     } finally {
         submitButton.disabled = false;
         submitButton.textContent = "+ ADD MOVIE";
