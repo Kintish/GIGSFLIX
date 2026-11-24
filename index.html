@@ -51,6 +51,13 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 #player { width: 100%; max-height: 65vh; background: black; }
 #playerError { display: none; color: #ff7777; margin-top: 12px; }
 .player-title { margin: 15px 0; }
+.movie-backdrop { position: fixed; z-index: -3; inset: 0; opacity: 0; background: #080808 center / cover no-repeat; transition: opacity .55s ease, transform 8s ease; transform: scale(1); }
+.movie-backdrop.visible { opacity: .34; transform: scale(1.06); }
+.movie-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,5,5,.38), rgba(5,5,5,.92) 75%, #080808 100%); }
+.rating { display: flex; align-items: center; gap: 5px; margin-top: 10px; }
+.star-button { width: 34px; min-height: 34px; height: 34px; padding: 0; background: transparent; color: #777; font-size: 25px; line-height: 34px; }
+.star-button.active, .star-button:hover, .star-button.hovered { color: #ffc400; }
+.rating-value { color: #aaa; font-size: 12px; margin-left: 3px; }
 .modal input[type="file"] { color: #ccc; }
 .modal input[type="file"]::file-selector-button { background: #e50914; color: white; border: none; border-radius: 4px; padding: 8px 10px; margin-right: 10px; font-weight: bold; cursor: pointer; }
 #welcomeIntro { position: fixed; z-index: 9999; inset: 0; display: grid; place-items: center; overflow: hidden; background: linear-gradient(90deg, rgba(4,4,4,.86), rgba(4,4,4,.38), rgba(4,4,4,.86)), url("assets/movie-set.jpg") center 58% / cover no-repeat; transition: opacity .65s ease, visibility .65s ease; }
@@ -105,6 +112,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 </style>
 </head>
 <body>
+<div class="movie-backdrop" id="movieBackdrop" aria-hidden="true"></div>
 <div id="welcomeIntro" role="dialog" aria-label="Welcome to GIGSFLIX" onclick="closeWelcomeIntro()">
     <div class="welcome-content">
         <div class="welcome-logo">
@@ -129,6 +137,12 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
         <button class="red" type="button" onclick="openLogin()">Admin</button>
     </nav>
 </header>
+
+<script>
+document.addEventListener("click", event => {
+    if (!event.target.closest(".movie")) setMovieBackdrop("");
+});
+</script>
 
 <section class="hero" id="home">
     <h1>Unlimited Entertainment.</h1>
@@ -192,6 +206,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
                 <option value="480">480p - SD</option>
                 <option value="360">360p - Low</option>
             </select>
+            <label for="movieGenre">Movie category</label>
             <select id="movieGenre" required>
                 <option value="">Select movie category</option>
                 <option>Action</option>
@@ -205,6 +220,10 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
                 <option>Animations</option>
                 <option>Other</option>
             </select>
+            <label style="display:flex;align-items:center;gap:10px;min-height:44px;margin-bottom:14px;cursor:pointer">
+                <input type="checkbox" id="movieAllowRatings" checked style="width:20px;height:20px;margin:0;accent-color:#e50914">
+                Allow viewers to rate this movie
+            </label>
             <button type="submit" class="red full">+ ADD MOVIE</button>
         </form>
         <hr style="border-color:#444;margin:25px 0">
@@ -472,7 +491,8 @@ async function addMovie(event) {
             video: null,
             posterBlob: true,
             videoBlob: true,
-            genre
+            genre,
+            allowRatings: document.getElementById("movieAllowRatings").checked
         };
 
         movies.unshift(movie);
@@ -491,6 +511,35 @@ async function addMovie(event) {
     }
 }
 
+function getMovieRatings() {
+    return JSON.parse(localStorage.getItem("gigsflix_ratings") || "{}");
+}
+
+function setMovieRating(movieId, rating) {
+    const ratings = getMovieRatings();
+    ratings[String(movieId)] = rating;
+    localStorage.setItem("gigsflix_ratings", JSON.stringify(ratings));
+}
+
+async function getPosterSource(movie) {
+    if (movie.posterBlob) {
+        const posterFile = await getMedia(movie.id, "poster");
+        return posterFile ? URL.createObjectURL(posterFile) : "";
+    }
+    return movie.poster || "";
+}
+
+function setMovieBackdrop(posterSource) {
+    const backdrop = document.getElementById("movieBackdrop");
+    if (!posterSource) {
+        backdrop.classList.remove("visible");
+        backdrop.style.backgroundImage = "";
+        return;
+    }
+    backdrop.style.backgroundImage = `url("${posterSource}")`;
+    backdrop.classList.add("visible");
+}
+
 async function createMovieCard(movie) {
     const card = document.createElement("div");
     card.className = "movie";
@@ -498,16 +547,12 @@ async function createMovieCard(movie) {
     const image = document.createElement("img");
     image.alt = movie.title;
 
-    if (movie.posterBlob) {
-        const posterFile = await getMedia(movie.id, "poster");
-        if (posterFile) {
-            image.src = URL.createObjectURL(posterFile);
-        }
-    } else {
-        image.src = movie.poster;
-    }
+    const posterSource = await getPosterSource(movie);
+    if (posterSource) image.src = posterSource;
 
     image.onerror = function() { this.style.display = "none"; };
+    card.onclick = () => setMovieBackdrop(posterSource);
+    card.onmouseleave = () => setMovieBackdrop("");
 
     const info = document.createElement("div");
     info.className = "movie-info";
@@ -523,9 +568,53 @@ async function createMovieCard(movie) {
     play.style.width = "100%";
     play.style.marginTop = "12px";
     play.textContent = "WATCH NOW";
-    play.onclick = () => playMovie(movie.id);
+    play.onclick = event => {
+        event.stopPropagation();
+        setMovieBackdrop(posterSource);
+        playMovie(movie.id);
+    };
 
-    info.append(title, genre, play);
+    if (movie.allowRatings === false) {
+        info.append(title, genre, play);
+        card.append(image, info);
+        return card;
+    }
+
+    const rating = document.createElement("div");
+    rating.className = "rating";
+    rating.setAttribute("aria-label", `Rate ${movie.title}`);
+
+    const savedRating = Number(getMovieRatings()[String(movie.id)] || 0);
+    const starButtons = [];
+
+    for (let star = 1; star <= 5; star++) {
+        const starButton = document.createElement("button");
+        starButton.type = "button";
+        starButton.className = "star-button";
+        starButton.textContent = "★";
+        starButton.setAttribute("aria-label", `${star} stars`);
+
+        if (star <= savedRating) starButton.classList.add("active");
+
+        starButton.onclick = event => {
+            event.stopPropagation();
+            setMovieRating(movie.id, star);
+            starButtons.forEach((button, index) => {
+                button.classList.toggle("active", index < star);
+            });
+            ratingValue.textContent = `${star}/5`;
+        };
+
+        starButtons.push(starButton);
+        rating.appendChild(starButton);
+    }
+
+    const ratingValue = document.createElement("span");
+    ratingValue.className = "rating-value";
+    ratingValue.textContent = savedRating ? `${savedRating}/5` : "Rate";
+    rating.appendChild(ratingValue);
+
+    info.append(title, genre, rating, play);
     card.append(image, info);
     return card;
 }
@@ -652,6 +741,7 @@ async function playMovie(id) {
 }
 
 function closePlayer() {
+    setMovieBackdrop("");
     const player = document.getElementById("player");
     player.pause();
     if (player.src.startsWith("blob:")) URL.revokeObjectURL(player.src);
