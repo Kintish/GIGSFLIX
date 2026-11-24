@@ -7,8 +7,10 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { background: #080808; color: white; font-family: Arial, sans-serif; }
-header { background: #111; padding: 18px 5%; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #292929; }
+body { min-height: 100vh; background: #080808; color: white; font-family: Arial, sans-serif; }
+body::before { content: ""; position: fixed; z-index: -2; inset: 0; background: url("assets/movie-set.jpg") center 58% / cover no-repeat; }
+body::after { content: ""; position: fixed; z-index: -1; inset: 0; background: linear-gradient(180deg, rgba(5,5,5,.72), rgba(5,5,5,.88) 58%, #080808 100%); }
+header { background: rgba(10,10,10,.88); backdrop-filter: blur(14px); padding: 18px 5%; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid rgba(255,255,255,.09); }
 .logo { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 30px; font-weight: 900; letter-spacing: 1px; }
 .logo-mark { width: 38px; height: 38px; display: grid; place-items: center; background: #e50914; border-radius: 8px 8px 8px 2px; box-shadow: 0 8px 24px rgba(229, 9, 20, .28); }
 .logo-mark::before { content: ""; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 12px solid white; margin-left: 3px; }
@@ -18,7 +20,8 @@ nav a { color: white; text-decoration: none; cursor: pointer; }
 button { cursor: pointer; border: none; border-radius: 5px; padding: 10px 17px; font-weight: bold; }
 .red { background: #e50914; color: white; }
 .red:hover { background: #b80710; }
-.hero { min-height: 300px; padding: 80px 7%; background: linear-gradient(90deg, #171717, #101010); display: flex; flex-direction: column; justify-content: center; }
+.hero { min-height: 360px; padding: 80px 7%; background: linear-gradient(90deg, rgba(8,8,8,.96) 0%, rgba(8,8,8,.78) 48%, rgba(8,8,8,.18) 100%), url("assets/movie-set.jpg") center 58% / cover no-repeat; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid rgba(255,255,255,.06); }
+.hero h1, .hero p, .hero button { text-shadow: 0 3px 18px rgba(0,0,0,.65); }
 .hero h1 { font-size: 45px; margin-bottom: 15px; }
 .hero p { color: #bbb; font-size: 17px; margin-bottom: 22px; }
 .section { padding: 30px 5%; }
@@ -48,7 +51,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 .player-title { margin: 15px 0; }
 .modal input[type="file"] { color: #ccc; }
 .modal input[type="file"]::file-selector-button { background: #e50914; color: white; border: none; border-radius: 4px; padding: 8px 10px; margin-right: 10px; font-weight: bold; cursor: pointer; }
-#welcomeIntro { position: fixed; z-index: 9999; inset: 0; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 45%, #242424 0, #111 38%, #080808 72%); transition: opacity .65s ease, visibility .65s ease; }
+#welcomeIntro { position: fixed; z-index: 9999; inset: 0; display: grid; place-items: center; overflow: hidden; background: linear-gradient(90deg, rgba(4,4,4,.86), rgba(4,4,4,.38), rgba(4,4,4,.86)), url("assets/movie-set.jpg") center 58% / cover no-repeat; transition: opacity .65s ease, visibility .65s ease; }
 #welcomeIntro.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 .welcome-content { text-align: center; padding: 20px; animation: welcomeRise 1s ease both; }
 .welcome-logo { display: inline-grid; grid-template-columns: 74px auto; align-items: center; gap: 16px; margin-bottom: 28px; }
@@ -63,6 +66,8 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 @keyframes welcomeLine { to { width: min(420px, 70vw); } }
 @media(prefers-reduced-motion: reduce) { #welcomeIntro, .welcome-content, .welcome-play, .welcome-line { animation: none; transition: none; } .welcome-line { width: min(420px, 70vw); } }
 @media(max-width:600px) {
+    body::before { background-position: 55% center; }
+    .hero { min-height: 310px; background-position: 58% center; }
     .hero h1 { font-size: 32px; }
     header { padding: 15px; }
     .logo { font-size: 23px; }
