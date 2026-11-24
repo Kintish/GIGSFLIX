@@ -95,6 +95,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     <nav>
         <a href="#home">Home</a>
         <a href="#movies">Movies</a>
+        <a href="#animations">Animations</a>
         <a href="#customer-service">Support</a>
         <button class="red" type="button" onclick="openLogin()">Admin</button>
     </nav>
@@ -110,6 +111,11 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     <h2>Latest Movies</h2>
     <input class="search" id="search" type="text" placeholder="Search for movies..." oninput="renderMovies()">
     <div class="movies" id="movieGrid"></div>
+</section>
+
+<section class="section" id="animations">
+    <h2>Animations</h2>
+    <div class="movies" id="animationGrid"></div>
 </section>
 
 <section class="section" id="customer-service">
@@ -160,6 +166,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
                 <option>Adventure</option>
                 <option>Drama</option>
                 <option>Sci-Fi</option>
+                <option>Animations</option>
                 <option>Other</option>
             </select>
             <button type="submit" class="red full">+ ADD MOVIE</button>
@@ -332,6 +339,7 @@ async function addMovie(event) {
         saveMovies();
         event.target.reset();
         await renderMovies();
+        await renderAnimationMovies();
         renderAdminMovies();
         alert("Movie successfully added to GIGSFLIX!");
     } catch (error) {
@@ -341,6 +349,45 @@ async function addMovie(event) {
         submitButton.disabled = false;
         submitButton.textContent = "+ ADD MOVIE";
     }
+}
+
+async function createMovieCard(movie) {
+    const card = document.createElement("div");
+    card.className = "movie";
+
+    const image = document.createElement("img");
+    image.alt = movie.title;
+
+    if (movie.posterBlob) {
+        const posterFile = await getMedia(movie.id, "poster");
+        if (posterFile) {
+            image.src = URL.createObjectURL(posterFile);
+        }
+    } else {
+        image.src = movie.poster;
+    }
+
+    image.onerror = function() { this.style.display = "none"; };
+
+    const info = document.createElement("div");
+    info.className = "movie-info";
+
+    const title = document.createElement("h3");
+    title.textContent = movie.title;
+
+    const genre = document.createElement("p");
+    genre.textContent = movie.genre;
+
+    const play = document.createElement("button");
+    play.className = "red";
+    play.style.width = "100%";
+    play.style.marginTop = "12px";
+    play.textContent = "WATCH NOW";
+    play.onclick = () => playMovie(movie.id);
+
+    info.append(title, genre, play);
+    card.append(image, info);
+    return card;
 }
 
 async function renderMovies() {
@@ -363,42 +410,29 @@ async function renderMovies() {
     }
 
     for (const movie of filtered) {
-        const card = document.createElement("div");
-        card.className = "movie";
+        grid.appendChild(await createMovieCard(movie));
+    }
+}
 
-        const image = document.createElement("img");
-        image.alt = movie.title;
+async function renderAnimationMovies() {
+    const grid = document.getElementById("animationGrid");
+    const animations = movies.filter(movie =>
+        movie.genre && movie.genre.toLowerCase() === "animations"
+    );
 
-        if (movie.posterBlob) {
-            const posterFile = await getMedia(movie.id, "poster");
-            if (posterFile) {
-                image.src = URL.createObjectURL(posterFile);
-            }
-        } else {
-            image.src = movie.poster;
-        }
+    grid.innerHTML = "";
 
-        image.onerror = function() { this.style.display = "none"; };
+    if (animations.length === 0) {
+        grid.innerHTML = `
+            <div class="empty">
+                <h3>No animated movies yet.</h3>
+                <p style="margin-top:10px">Add a movie with the Animations category.</p>
+            </div>`;
+        return;
+    }
 
-        const info = document.createElement("div");
-        info.className = "movie-info";
-
-        const title = document.createElement("h3");
-        title.textContent = movie.title;
-
-        const genre = document.createElement("p");
-        genre.textContent = movie.genre;
-
-        const play = document.createElement("button");
-        play.className = "red";
-        play.style.width = "100%";
-        play.style.marginTop = "12px";
-        play.textContent = "WATCH NOW";
-        play.onclick = () => playMovie(movie.id);
-
-        info.append(title, genre, play);
-        card.append(image, info);
-        grid.appendChild(card);
+    for (const movie of animations) {
+        grid.appendChild(await createMovieCard(movie));
     }
 }
 
@@ -436,6 +470,7 @@ async function deleteMovie(id) {
         movies = movies.filter(movie => movie.id !== id);
         saveMovies();
         await renderMovies();
+        await renderAnimationMovies();
         renderAdminMovies();
     }
 }
@@ -495,6 +530,7 @@ player.addEventListener("error", () => {
 });
 
 renderMovies();
+renderAnimationMovies();
 </script>
 </body>
 </html>
