@@ -32,6 +32,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .hero p { color: #ddd; font-size: 18px; font-weight: 500; margin-bottom: 24px; }
 .section { max-width: 1440px; width: 100%; margin: 0 auto; padding: 30px 5%; }
 .section h2 { position: relative; width: fit-content; margin-bottom: 22px; font-family: "Bebas Neue", Impact, sans-serif; font-size: clamp(30px, 4vw, 42px); line-height: 1; font-weight: 400; letter-spacing: 1.5px; }
+.search-result-summary { color: #aaa; margin-bottom: 16px; }
 .top-rated-slideshow { position: relative; overflow: hidden; border-radius: 10px; background: #151515; }
 .top-rated-slide { display: grid; grid-template-columns: minmax(220px, 32%) 1fr; min-height: 320px; background: linear-gradient(110deg, #171717, #080808); }
 .top-rated-slide > img { width: 100%; height: 100%; min-height: 320px; max-height: 420px; object-fit: cover; background: #252525; }
@@ -161,9 +162,10 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     </div>
     <nav>
         <a href="#home">Home</a>
-        <a href="#movies">Movies</a>
-        <a href="#series">Series</a>
-        <a href="#animations">Animations</a>
+        <a href="#catalogSearch">Search</a>
+        <a href="#movies" onclick="clearCatalogSearch()">Movies</a>
+        <a href="#series" onclick="clearCatalogSearch()">Series</a>
+        <a href="#animations" onclick="clearCatalogSearch()">Animations</a>
         <a href="#customer-service">Support</a>
         <button class="red" type="button" onclick="openLogin()">Admin</button>
     </nav>
@@ -181,6 +183,15 @@ document.addEventListener("click", event => {
     <button class="red" style="width:140px" type="button" onclick="document.getElementById('movies').scrollIntoView()">Explore Movies</button>
 </section>
 
+<section class="section" id="catalogSearch">
+    <h2>Search the catalog</h2>
+    <input class="search" id="search" type="text" placeholder="Search all movies, series, and animations..." oninput="renderMovies()">
+    <div id="searchResultsSection" hidden>
+        <p class="search-result-summary" id="searchResultSummary" aria-live="polite"></p>
+        <div class="movies" id="searchResults"></div>
+    </div>
+</section>
+
 <section class="section" id="topRated">
     <h2>Top Rated Movies</h2>
     <div class="top-rated-slideshow" id="topRatedSlideshow" aria-live="polite">
@@ -191,7 +202,6 @@ document.addEventListener("click", event => {
 
 <section class="section" id="movies">
     <h2>Movies</h2>
-    <input class="search" id="search" type="text" placeholder="Search movies, series, and animations..." oninput="renderMovies()">
     <div class="movies" id="movieGrid"></div>
 </section>
 
@@ -1051,23 +1061,84 @@ async function renderTopRatedSlideshow() {
     startTopRatedTimer();
 }
 
+function getSearchCategory(movie, episode = getSeriesEpisode(movie)) {
+    if (episode) return "TV Series";
+    return (movie.genre || "").toLowerCase() === "animations" ? "Animation" : "Movie";
+}
+
 function matchesSearch(movie, search) {
-    return (movie.title || "").toLowerCase().includes(search) ||
-        (movie.genre || "").toLowerCase().includes(search);
+    if (!search) return true;
+
+    const episode = getSeriesEpisode(movie);
+    const category = getSearchCategory(movie, episode);
+    const categoryPlural = category === "TV Series" ? "series" :
+        category === "Animation" ? "animations" : "movies";
+    const searchableText = [
+        movie.title,
+        movie.genre,
+        movie.description,
+        episode && episode.seriesTitle,
+        episode && `season ${episode.season} episode ${episode.episode}`,
+        category,
+        categoryPlural
+    ].filter(Boolean).join(" ").toLowerCase();
+
+    return searchableText.includes(search);
+}
+
+function clearCatalogSearch() {
+    const search = document.getElementById("search");
+    if (!search.value) return;
+    search.value = "";
+    renderMovies();
 }
 
 async function renderMovies() {
-    const grid = document.getElementById("movieGrid");
     const search = document.getElementById("search").value.trim().toLowerCase();
-    const filtered = movies.filter(movie => !getSeriesEpisode(movie) && matchesSearch(movie, search));
+    const searchResultsSection = document.getElementById("searchResultsSection");
+    const searchResults = document.getElementById("searchResults");
+    const catalogSections = ["topRated", "movies", "series", "animations"]
+        .map(id => document.getElementById(id));
 
+    if (search) {
+        catalogSections.forEach(section => { section.hidden = true; });
+        searchResultsSection.hidden = false;
+        searchResults.innerHTML = "";
+        const filtered = movies.filter(movie => matchesSearch(movie, search));
+        document.getElementById("searchResultSummary").textContent =
+            `${filtered.length} result${filtered.length === 1 ? "" : "s"} for "${search}"`;
+
+        if (filtered.length === 0) {
+            searchResults.innerHTML = '<div class="empty">No movies, series, or animations match your search.</div>';
+            return;
+        }
+
+        for (const movie of filtered) {
+            const episode = getSeriesEpisode(movie);
+            const category = getSearchCategory(movie, episode);
+            const title = episode
+                ? `${episode.seriesTitle} - Season ${episode.season}, Episode ${episode.episode}`
+                : movie.title;
+            const metadata = episode
+                ? `${category} · Season ${episode.season} · Episode ${episode.episode}`
+                : category === "Animation" ? category : `${category} · ${movie.genre || "Other"}`;
+            searchResults.appendChild(await createMovieCard(movie, title, metadata));
+        }
+        return;
+    }
+
+    searchResultsSection.hidden = true;
+    catalogSections.forEach(section => { section.hidden = false; });
+
+    const grid = document.getElementById("movieGrid");
+    const filtered = movies.filter(movie => !getSeriesEpisode(movie));
     grid.innerHTML = "";
 
     if (filtered.length === 0) {
         grid.innerHTML = `
             <div class="empty">
-                <h3>${search ? "No movies match your search." : "No movies available yet."}</h3>
-                ${search ? "" : '<p style="margin-top:10px">New movies will appear here when the admin adds them.</p>'}
+                <h3>No movies available yet.</h3>
+                <p style="margin-top:10px">New movies will appear here when the admin adds them.</p>
             </div>`;
     } else {
         for (const movie of filtered) {
@@ -1075,8 +1146,8 @@ async function renderMovies() {
         }
     }
 
-    await renderSeriesMovies(search);
-    await renderAnimationMovies(search);
+    await renderSeriesMovies();
+    await renderAnimationMovies("");
 }
 
 async function renderSeriesMovies(search = "") {
@@ -1142,7 +1213,7 @@ async function renderSeriesMovies(search = "") {
     }
 }
 
-async function renderAnimationMovies(search = document.getElementById("search").value.trim().toLowerCase()) {
+async function renderAnimationMovies(search = "") {
     const grid = document.getElementById("animationGrid");
     const animations = movies.filter(movie =>
         movie.genre &&
