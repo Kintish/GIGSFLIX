@@ -394,11 +394,24 @@ async function deleteMedia(movieId) {
 }
 
 function openLogin() {
-    document.getElementById("loginModal").style.display = "block";
+    const loginModal = document.getElementById("loginModal");
+    if (!loginModal) return;
+    closeModal("adminModal");
+    loginModal.style.setProperty("display", "block", "important");
+    document.body.style.overflow = "hidden";
+    window.setTimeout(() => {
+        const passwordInput = document.getElementById("adminPassword");
+        if (passwordInput) passwordInput.focus();
+    }, 50);
 }
 
 function closeModal(id) {
-    document.getElementById(id).style.display = "none";
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.style.setProperty("display", "none", "important");
+    if (!document.querySelector('.modal[style*="block"]')) {
+        document.body.style.overflow = "";
+    }
 }
 
 function login(event) {
@@ -410,7 +423,9 @@ function login(event) {
         closeModal("loginModal");
         document.getElementById("adminPassword").value = "";
         document.getElementById("loginError").innerText = "";
-        document.getElementById("adminModal").style.display = "block";
+        const adminModal = document.getElementById("adminModal");
+        adminModal.style.setProperty("display", "block", "important");
+        document.body.style.overflow = "hidden";
         renderAdminMovies();
     } else {
         document.getElementById("loginError").innerText = "Incorrect password. Try again.";
@@ -418,7 +433,7 @@ function login(event) {
 }
 
 function closeAdmin() {
-    document.getElementById("adminModal").style.display = "none";
+    closeModal("adminModal");
 }
 
 function logout() {
