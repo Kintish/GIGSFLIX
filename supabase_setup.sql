@@ -14,6 +14,8 @@ create table if not exists public.movies (
 );
 
 alter table public.movies enable row level security;
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.movies to anon, authenticated;
 
 drop policy if exists "Public can read movies" on public.movies;
 create policy "Public can read movies"

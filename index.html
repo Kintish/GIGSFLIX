@@ -243,9 +243,9 @@ const DB_STORE = "movies";
 const SUPABASE_URL = "https://lpyimytnzilipwtdjiok.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uUS65L2jiv0ewY_YL-eRDQ_GN1Jh2ht";
 const SUPABASE_BUCKET = "gigsflix-media";
-let supabase = null;
+let gigsSupabase = null;
 if (window.supabase && typeof window.supabase.createClient === "function") {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    gigsSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 let movies = JSON.parse(localStorage.getItem("gigsflix_movies") || "[]");
 let isAdmin = false;
@@ -255,12 +255,12 @@ function saveMovies() {
 }
 
 async function loadPublicMovies() {
-    if (!supabase) {
+    if (!gigsSupabase) {
         console.warn("Supabase library is unavailable; using local movies.");
         return;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await gigsSupabase
         .from("movies")
         .select("*")
         .order("created_at", { ascending: false });
@@ -291,7 +291,7 @@ async function loadPublicMovies() {
 }
 
 async function publishMovie(movie, posterFile, videoFile) {
-    if (!supabase) throw new Error("The Supabase library could not be loaded.");
+    if (!gigsSupabase) throw new Error("The Supabase library could not be loaded.");
 
     const folder = `${Date.now()}-${crypto.randomUUID().replaceAll("-", "")}`;
     const posterExtension = posterFile.name.includes(".") ? posterFile.name.split(".").pop().toLowerCase() : "jpg";
@@ -299,24 +299,24 @@ async function publishMovie(movie, posterFile, videoFile) {
     const posterPath = `${folder}/poster.${posterExtension}`;
     const videoPath = `${folder}/video.${videoExtension}`;
 
-    const posterUpload = await supabase.storage.from(SUPABASE_BUCKET).upload(posterPath, posterFile, {
+    const posterUpload = await gigsSupabase.storage.from(SUPABASE_BUCKET).upload(posterPath, posterFile, {
         cacheControl: "3600",
         upsert: false,
         contentType: posterFile.type
     });
     if (posterUpload.error) throw posterUpload.error;
 
-    const videoUpload = await supabase.storage.from(SUPABASE_BUCKET).upload(videoPath, videoFile, {
+    const videoUpload = await gigsSupabase.storage.from(SUPABASE_BUCKET).upload(videoPath, videoFile, {
         cacheControl: "3600",
         upsert: false,
         contentType: videoFile.type
     });
     if (videoUpload.error) throw videoUpload.error;
 
-    const posterUrl = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(posterPath).data.publicUrl;
-    const videoUrl = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(videoPath).data.publicUrl;
+    const posterUrl = gigsSupabase.storage.from(SUPABASE_BUCKET).getPublicUrl(posterPath).data.publicUrl;
+    const videoUrl = gigsSupabase.storage.from(SUPABASE_BUCKET).getPublicUrl(videoPath).data.publicUrl;
 
-    const { error: insertError } = await supabase.from("movies").insert({
+    const { error: insertError } = await gigsSupabase.from("movies").insert({
         id: movie.id,
         title: movie.title,
         description: movie.description,
@@ -333,17 +333,17 @@ async function publishMovie(movie, posterFile, videoFile) {
 }
 
 async function unpublishMovie(movie) {
-    if (!supabase) return;
+    if (!gigsSupabase) return;
 
     const paths = [];
     if (movie.posterPath) paths.push(movie.posterPath);
     if (movie.videoPath) paths.push(movie.videoPath);
 
     if (paths.length) {
-        await supabase.storage.from(SUPABASE_BUCKET).remove(paths);
+        await gigsSupabase.storage.from(SUPABASE_BUCKET).remove(paths);
     }
 
-    await supabase.from("movies").delete().eq("id", String(movie.id));
+    await gigsSupabase.from("movies").delete().eq("id", String(movie.id));
 }
 
 function openMediaDatabase() {
