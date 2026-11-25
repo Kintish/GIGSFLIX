@@ -189,7 +189,7 @@ document.addEventListener("click", event => {
             <input type="text" id="movieTitle" placeholder="Movie title" required>
             <textarea id="movieDescription" placeholder="Movie description" required></textarea>
             <label for="moviePoster">Movie poster image</label>
-            <input type="file" id="moviePoster" accept="image/*" required>
+            <input type="file" id="moviePoster" accept="image/*">
             <label for="movieVideo">Movie video file (optional if an MP4 link is provided)</label>
             <input type="file" id="movieVideo" accept="video/*">
             <label for="movieVideoUrl">MP4 link</label>
@@ -296,17 +296,22 @@ async function publishMovie(movie, posterFile, videoFile, videoUrl) {
     if (!gigsSupabase) throw new Error("The Supabase library could not be loaded.");
 
     const folder = `${Date.now()}-${crypto.randomUUID().replaceAll("-", "")}`;
-    const posterExtension = posterFile.name.includes(".") ? posterFile.name.split(".").pop().toLowerCase() : "jpg";
-    const posterPath = `${folder}/poster.${posterExtension}`;
+    let posterPath = null;
+    let posterUrl = null;
     let videoPath = null;
     let publicVideoUrl = videoUrl ? videoUrl.trim() : null;
 
-    const posterUpload = await gigsSupabase.storage.from(SUPABASE_BUCKET).upload(posterPath, posterFile, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: posterFile.type
-    });
-    if (posterUpload.error) throw posterUpload.error;
+    if (posterFile) {
+        const posterExtension = posterFile.name.includes(".") ? posterFile.name.split(".").pop().toLowerCase() : "jpg";
+        posterPath = `${folder}/poster.${posterExtension}`;
+        const posterUpload = await gigsSupabase.storage.from(SUPABASE_BUCKET).upload(posterPath, posterFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: posterFile.type
+        });
+        if (posterUpload.error) throw posterUpload.error;
+        posterUrl = gigsSupabase.storage.from(SUPABASE_BUCKET).getPublicUrl(posterPath).data.publicUrl;
+    }
 
     if (videoFile) {
         const videoExtension = videoFile.name.includes(".") ? videoFile.name.split(".").pop().toLowerCase() : "mp4";
@@ -319,7 +324,6 @@ async function publishMovie(movie, posterFile, videoFile, videoUrl) {
         if (videoUpload.error) throw videoUpload.error;
     }
 
-    const posterUrl = gigsSupabase.storage.from(SUPABASE_BUCKET).getPublicUrl(posterPath).data.publicUrl;
     if (videoFile) {
         publicVideoUrl = gigsSupabase.storage.from(SUPABASE_BUCKET).getPublicUrl(videoPath).data.publicUrl;
     }
@@ -371,7 +375,11 @@ async function saveMedia(movieId, posterFile, videoFile) {
     const db = await openMediaDatabase();
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(DB_STORE, "readwrite");
-        transaction.objectStore(DB_STORE).put(posterFile, `${movieId}_poster`);
+        if (posterFile) {
+            transaction.objectStore(DB_STORE).put(posterFile, `${movieId}_poster`);
+        } else {
+            transaction.objectStore(DB_STORE).delete(`${movieId}_poster`);
+        }
         if (videoFile) {
             transaction.objectStore(DB_STORE).put(videoFile, `${movieId}_video`);
         } else {
@@ -502,12 +510,12 @@ async function addMovie(event) {
     const videoUrl = document.getElementById("movieVideoUrl").value.trim();
     const genre = document.getElementById("movieGenre").value;
 
-    if (!title || !posterFile || (!videoFile && !videoUrl)) {
-        alert("Please select a poster image and provide a movie video file or MP4 link.");
+    if (!title || (!videoFile && !videoUrl)) {
+        alert("Please provide a movie video file or MP4 link.");
         return;
     }
 
-    if (!posterFile.type.startsWith("image/")) {
+    if (posterFile && !posterFile.type.startsWith("image/")) {
         alert("The poster must be an image file.");
         return;
     }
@@ -536,7 +544,7 @@ async function addMovie(event) {
         const qualityHeight = Number(document.getElementById("movieQuality").value);
 
         submitButton.textContent = `CHECKING ${qualityHeight}p SOURCE...`;
-        const resizedPoster = await resizePosterFile(posterFile, qualityHeight);
+        const resizedPoster = posterFile ? await resizePosterFile(posterFile, qualityHeight) : null;
         if (videoFile) await validateVideoFile(videoFile);
 
         const movie = {
