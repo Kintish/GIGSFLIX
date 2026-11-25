@@ -318,6 +318,10 @@ let topRatedMovies = [];
 let topRatedIndex = 0;
 let topRatedTimer = null;
 let topRatedPaused = false;
+let movieBackdropSources = [];
+let movieBackdropIndex = 0;
+let movieBackdropTimer = null;
+let hoveredBackdropSource = "";
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
@@ -638,6 +642,7 @@ async function addMovie(event) {
         saveMovies();
         event.target.reset();
         await renderMovies();
+        startMovieBackdropSlideshow();
         await renderTopRatedSlideshow();
         renderAdminMovies();
         alert("Movie successfully added to GIGSFLIX!");
@@ -774,7 +779,7 @@ async function getPosterSource(movie) {
     return movie.poster || "";
 }
 
-function setMovieBackdrop(posterSource) {
+function renderMovieBackdrop(posterSource) {
     const backdrop = document.getElementById("movieBackdrop");
     if (!posterSource) {
         backdrop.classList.remove("visible");
@@ -790,6 +795,35 @@ function setMovieBackdrop(posterSource) {
     backdrop.dataset.posterSource = posterSource;
     void backdrop.offsetWidth;
     backdrop.classList.add("visible");
+}
+
+function setMovieBackdrop(posterSource) {
+    hoveredBackdropSource = posterSource || "";
+    renderMovieBackdrop(
+        hoveredBackdropSource ||
+        movieBackdropSources[movieBackdropIndex] ||
+        ""
+    );
+}
+
+function startMovieBackdropSlideshow() {
+    window.clearInterval(movieBackdropTimer);
+    movieBackdropSources = Array.from(new Set(
+        movies.map(movie => movie.poster).filter(Boolean)
+    ));
+    movieBackdropIndex = 0;
+    hoveredBackdropSource = "";
+    renderMovieBackdrop(movieBackdropSources[0] || "");
+
+    if (movieBackdropSources.length < 2 ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    movieBackdropTimer = window.setInterval(() => {
+        movieBackdropIndex = (movieBackdropIndex + 1) % movieBackdropSources.length;
+        if (!hoveredBackdropSource) {
+            renderMovieBackdrop(movieBackdropSources[movieBackdropIndex]);
+        }
+    }, 15000);
 }
 
 async function createMovieCard(movie, displayTitle = movie.title, metadata = movie.genre) {
@@ -1168,6 +1202,7 @@ async function deleteMovie(id) {
         movies = movies.filter(movie => String(movie.id) !== String(id));
         saveMovies();
         await renderMovies();
+        startMovieBackdropSlideshow();
         await renderTopRatedSlideshow();
         renderAdminMovies();
     }
@@ -1289,6 +1324,7 @@ loadPublicMovies()
         ratingLoadError = "Shared ratings could not be initialized. Please try again later.";
     })
     .finally(() => {
+        startMovieBackdropSlideshow();
         renderMovies();
         renderTopRatedSlideshow();
     });
