@@ -187,7 +187,7 @@ document.addEventListener("click", event => {
 
 <section class="section" id="movies">
     <h2>Movies</h2>
-    <input class="search" id="search" type="text" placeholder="Search movies and series..." oninput="renderMovies()">
+    <input class="search" id="search" type="text" placeholder="Search movies, series, and animations..." oninput="renderMovies()">
     <div class="movies" id="movieGrid"></div>
 </section>
 
@@ -631,7 +631,6 @@ async function addMovie(event) {
         saveMovies();
         event.target.reset();
         await renderMovies();
-        await renderAnimationMovies();
         await renderTopRatedSlideshow();
         renderAdminMovies();
         alert("Movie successfully added to GIGSFLIX!");
@@ -1018,7 +1017,7 @@ function matchesSearch(movie, search) {
 
 async function renderMovies() {
     const grid = document.getElementById("movieGrid");
-    const search = document.getElementById("search").value.toLowerCase();
+    const search = document.getElementById("search").value.trim().toLowerCase();
     const filtered = movies.filter(movie => !getSeriesEpisode(movie) && matchesSearch(movie, search));
 
     grid.innerHTML = "";
@@ -1036,13 +1035,17 @@ async function renderMovies() {
     }
 
     await renderSeriesMovies(search);
+    await renderAnimationMovies(search);
 }
 
 async function renderSeriesMovies(search = "") {
     const list = document.getElementById("seriesList");
     const seriesMovies = movies
         .map(movie => ({ movie, episode: getSeriesEpisode(movie) }))
-        .filter(item => item.episode && matchesSearch(item.movie, search));
+        .filter(item => item.episode && (
+            item.episode.seriesTitle.toLowerCase().includes(search) ||
+            matchesSearch(item.movie, search)
+        ));
     const groups = new Map();
 
     for (const item of seriesMovies) {
@@ -1098,10 +1101,12 @@ async function renderSeriesMovies(search = "") {
     }
 }
 
-async function renderAnimationMovies() {
+async function renderAnimationMovies(search = document.getElementById("search").value.trim().toLowerCase()) {
     const grid = document.getElementById("animationGrid");
     const animations = movies.filter(movie =>
-        movie.genre && movie.genre.toLowerCase() === "animations"
+        movie.genre &&
+        movie.genre.toLowerCase() === "animations" &&
+        matchesSearch(movie, search)
     );
 
     grid.innerHTML = "";
@@ -1109,8 +1114,8 @@ async function renderAnimationMovies() {
     if (animations.length === 0) {
         grid.innerHTML = `
             <div class="empty">
-                <h3>No animated movies yet.</h3>
-                <p style="margin-top:10px">Add a movie with the Animations category.</p>
+                <h3>${search ? "No animations match your search." : "No animated movies yet."}</h3>
+                ${search ? "" : '<p style="margin-top:10px">Add a movie with the Animations category.</p>'}
             </div>`;
         return;
     }
@@ -1156,7 +1161,6 @@ async function deleteMovie(id) {
         movies = movies.filter(movie => String(movie.id) !== String(id));
         saveMovies();
         await renderMovies();
-        await renderAnimationMovies();
         await renderTopRatedSlideshow();
         renderAdminMovies();
     }
@@ -1279,7 +1283,6 @@ loadPublicMovies()
     })
     .finally(() => {
         renderMovies();
-        renderAnimationMovies();
         renderTopRatedSlideshow();
     });
 </script>
