@@ -33,6 +33,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .section { max-width: 1440px; width: 100%; margin: 0 auto; padding: 30px 5%; }
 .section h2 { position: relative; width: fit-content; margin-bottom: 22px; font-family: "Bebas Neue", Impact, sans-serif; font-size: clamp(30px, 4vw, 42px); line-height: 1; font-weight: 400; letter-spacing: 1.5px; }
 .search-result-summary { color: #aaa; margin-bottom: 16px; }
+.whatsapp-cta { display: inline-flex; align-items: center; min-height: 44px; margin-top: 16px; padding: 12px 18px; border-radius: 5px; background: #25d366; color: #081a0d; font-weight: 700; text-decoration: none; }
+.whatsapp-cta:hover { background: #1fbd5b; }
 .top-rated-slideshow { position: relative; overflow: hidden; border-radius: 10px; background: #151515; }
 .top-rated-slide { display: grid; grid-template-columns: minmax(220px, 32%) 1fr; min-height: 320px; background: linear-gradient(110deg, #171717, #080808); }
 .top-rated-slide > img { width: 100%; height: 100%; min-height: 320px; max-height: 420px; object-fit: cover; background: #252525; }
@@ -222,7 +224,9 @@ document.addEventListener("click", event => {
 
 <section class="section" id="customer-service">
     <h2>Customer Support</h2>
-    <p style="color:#aaa">Need help with GIGSFLIX? Contact us at <a href="mailto:licker502@gmail.com" style="color:#e50914">licker502@gmail.com</a>.</p>
+    <p style="color:#aaa">Have a movie recommendation? Chat with us on WhatsApp. For other support, email <a href="mailto:licker502@gmail.com" style="color:#e50914">licker502@gmail.com</a>.</p>
+    <a class="whatsapp-cta" href="https://wa.me/254716460244?text=Hi%20GIGSFLIX%2C%20I%27d%20like%20to%20recommend%20a%20movie." target="_blank" rel="noopener noreferrer">Recommend a movie on WhatsApp</a>
+    <p style="color:#aaa;margin-top:12px">WhatsApp: +254 716 460 244</p>
 </section>
 
 <footer>
