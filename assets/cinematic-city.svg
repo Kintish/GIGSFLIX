@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0" stop-color="#080c20"/>
+      <stop offset=".45" stop-color="#211638"/>
+      <stop offset=".78" stop-color="#6b2856"/>
+      <stop offset="1" stop-color="#17152d"/>
+    </linearGradient>
+    <radialGradient id="sunset">
+      <stop offset="0" stop-color="#ffbf90" stop-opacity=".9"/>
+      <stop offset=".48" stop-color="#ff668e" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#ff4e9a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="horizon" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#ff6298" stop-opacity=".52"/>
+      <stop offset="1" stop-color="#10142a" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="windows" width="72" height="62" patternUnits="userSpaceOnUse">
+      <rect x="12" y="12" width="8" height="14" fill="#ffb5d3" opacity=".68"/>
+      <rect x="40" y="12" width="8" height="14" fill="#82d8ff" opacity=".55"/>
+      <rect x="12" y="42" width="8" height="10" fill="#f7c77f" opacity=".58"/>
+      <rect x="40" y="42" width="8" height="10" fill="#ff78b7" opacity=".5"/>
+    </pattern>
+    <clipPath id="city">
+      <path d="M0 790V670h90V590h62v75h50V540h112v145h78V610h90v90h76V500h112v196h58V610h82v100h60V520h105v185h88V620h73v85h66V550h120v155h59V610h106v105h63V525h98v188h78V605h102v109h66v-88h118v454H0z"/>
+    </clipPath>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <circle cx="1330" cy="500" r="330" fill="url(#sunset)"/>
+  <circle cx="1330" cy="500" r="126" fill="#ffad9a" opacity=".72"/>
+  <path d="M0 610c280-66 460-47 690-5s475 12 710-32 371-30 520 3v172H0z" fill="url(#horizon)"/>
+  <g fill="#e5dcff">
+    <circle cx="134" cy="132" r="2"/><circle cx="282" cy="238" r="2"/>
+    <circle cx="430" cy="114" r="2.5"/><circle cx="601" cy="204" r="1.8"/>
+    <circle cx="778" cy="108" r="2"/><circle cx="931" cy="178" r="2.3"/>
+    <circle cx="1088" cy="98" r="1.8"/><circle cx="1490" cy="134" r="2"/>
+    <circle cx="1662" cy="247" r="2.4"/><circle cx="1802" cy="111" r="1.8"/>
+    <circle cx="155" cy="355" r="1.8"/><circle cx="526" cy="322" r="2"/>
+    <circle cx="852" cy="294" r="1.8"/><circle cx="1720" cy="372" r="2"/>
+  </g>
+  <path d="M0 710l174-95 110 37 147-125 149 124 146-89 126 78 129-134 153 94 124-96 147 115 151-80 164 93v368H0z" fill="#171a37" opacity=".76"/>
+  <path d="M0 790V670h90V590h62v75h50V540h112v145h78V610h90v90h76V500h112v196h58V610h82v100h60V520h105v185h88V620h73v85h66V550h120v155h59V610h106v105h63V525h98v188h78V605h102v109h66v-88h118v454H0z" fill="#0c1025"/>
+  <g clip-path="url(#city)" opacity=".72">
+    <rect y="490" width="1920" height="590" fill="url(#windows)"/>
+  </g>
+  <path d="M0 850h1920v230H0z" fill="#090d1d" opacity=".78"/>
+  <path d="M0 1080l690-282h540l690 282" fill="none" stroke="#ff5c9b" stroke-opacity=".28" stroke-width="4"/>
+  <path d="M0 1080l790-240h340l790 240" fill="none" stroke="#58cfff" stroke-opacity=".2" stroke-width="3"/>
+  <path d="M0 1008h1920M0 1048h1920" stroke="#b65b9c" stroke-opacity=".14" stroke-width="2"/>
+</svg>

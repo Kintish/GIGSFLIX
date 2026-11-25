@@ -12,8 +12,8 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { min-height: 100vh; background: #080808; color: white; font-family: "DM Sans", "Trebuchet MS", sans-serif; }
-body::before { content: ""; position: fixed; z-index: -2; inset: 0; background: url("assets/movie-set.jpg") center 58% / cover no-repeat; }
-body::after { content: ""; position: fixed; z-index: -1; inset: 0; background: linear-gradient(180deg, rgba(5,5,5,.72), rgba(5,5,5,.88) 58%, #080808 100%); }
+body::before { content: ""; position: fixed; z-index: -3; inset: 0; background: url("assets/cinematic-city.svg") center 58% / cover no-repeat; }
+body::after { content: ""; position: fixed; z-index: -2; inset: 0; background: linear-gradient(180deg, rgba(5,5,5,.52), rgba(5,5,5,.78) 58%, #080808 100%); }
 header { background: rgba(10,10,10,.88); backdrop-filter: blur(14px); padding: 18px 5%; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid rgba(255,255,255,.09); }
 .logo { display: flex; align-items: center; gap: 9px; color: #fff; font-family: "Bebas Neue", Impact, sans-serif; font-size: 34px; line-height: 1; font-weight: 400; letter-spacing: 2px; }
 .logo-mark { width: 38px; height: 38px; display: grid; place-items: center; background: #e50914; border-radius: 8px 8px 8px 2px; box-shadow: 0 8px 24px rgba(229, 9, 20, .28); }
@@ -26,7 +26,7 @@ button { cursor: pointer; border: none; border-radius: 5px; padding: 10px 17px; 
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid rgba(229,9,20,.75); outline-offset: 3px; }
 .red { background: #e50914; color: white; }
 .red:hover { background: #b80710; }
-.hero { min-height: 360px; padding: 80px 7%; background: linear-gradient(90deg, rgba(8,8,8,.96) 0%, rgba(8,8,8,.78) 48%, rgba(8,8,8,.18) 100%), url("assets/movie-set.jpg") center 58% / cover no-repeat; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid rgba(255,255,255,.06); }
+.hero { min-height: 360px; padding: 80px 7%; background: linear-gradient(90deg, rgba(8,8,8,.92) 0%, rgba(8,8,8,.68) 48%, rgba(8,8,8,.12) 100%), url("assets/cinematic-city.svg") center 58% / cover no-repeat; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid rgba(255,255,255,.06); }
 .hero h1, .hero p, .hero button { text-shadow: 0 3px 18px rgba(0,0,0,.65); }
 .hero h1 { max-width: 760px; font-family: "Bebas Neue", Impact, sans-serif; font-size: clamp(52px, 7vw, 92px); line-height: .92; letter-spacing: 1px; margin-bottom: 18px; }
 .hero p { color: #ddd; font-size: 18px; font-weight: 500; margin-bottom: 24px; }
@@ -81,7 +81,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 #videoStage:fullscreen #player, #videoStage:-webkit-full-screen #player { width: 100%; height: 100%; max-height: none; }
 #playerError { display: none; color: #ff7777; margin-top: 12px; }
 .player-title { margin: 15px 0; }
-.movie-backdrop { position: fixed; z-index: -3; inset: 0; opacity: 0; background: #080808 center / cover no-repeat; transition: opacity .55s ease, transform 8s ease; transform: scale(1); }
+.movie-backdrop { position: fixed; z-index: -1; inset: 0; opacity: 0; background: #080808 center / cover no-repeat; transition: opacity .55s ease, transform 8s ease; transform: scale(1); }
 .movie-backdrop.visible { opacity: .34; transform: scale(1.06); }
 .movie-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,5,5,.38), rgba(5,5,5,.92) 75%, #080808 100%); }
 .rating { display: flex; align-items: center; gap: 5px; margin-top: 10px; }
@@ -106,7 +106,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     .movie img { aspect-ratio: 2 / 3; height: auto; }
 }
 
-@media(prefers-reduced-motion: reduce) { #welcomeIntro, .welcome-content, .welcome-play, .welcome-line { animation: none; transition: none; } .welcome-line { width: min(420px, 70vw); } }
+@media(prefers-reduced-motion: reduce) { #welcomeIntro, .welcome-content, .welcome-play, .welcome-line, .movie-backdrop { animation: none; transition: none; } .welcome-line { width: min(420px, 70vw); } }
 @media(max-width:600px) {
     body::before { background-position: 55% center; }
     header { flex-wrap: wrap; row-gap: 8px; }
@@ -773,9 +773,16 @@ function setMovieBackdrop(posterSource) {
     if (!posterSource) {
         backdrop.classList.remove("visible");
         backdrop.style.backgroundImage = "";
+        backdrop.dataset.posterSource = "";
         return;
     }
+
+    if (backdrop.dataset.posterSource === posterSource && backdrop.classList.contains("visible")) return;
+
+    backdrop.classList.remove("visible");
     backdrop.style.backgroundImage = `url("${posterSource}")`;
+    backdrop.dataset.posterSource = posterSource;
+    void backdrop.offsetWidth;
     backdrop.classList.add("visible");
 }
 
@@ -790,6 +797,7 @@ async function createMovieCard(movie, displayTitle = movie.title, metadata = mov
     if (posterSource) image.src = posterSource;
 
     image.onerror = function() { this.style.display = "none"; };
+    card.onmouseenter = () => setMovieBackdrop(posterSource);
     card.onclick = () => setMovieBackdrop(posterSource);
     card.onmouseleave = () => setMovieBackdrop("");
 
