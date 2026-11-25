@@ -32,6 +32,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .hero p { color: #ddd; font-size: 18px; font-weight: 500; margin-bottom: 24px; }
 .section { max-width: 1440px; width: 100%; margin: 0 auto; padding: 30px 5%; }
 .section h2 { position: relative; width: fit-content; margin-bottom: 22px; font-family: "Bebas Neue", Impact, sans-serif; font-size: clamp(30px, 4vw, 42px); line-height: 1; font-weight: 400; letter-spacing: 1.5px; }
+.top-rated-slideshow { position: relative; overflow: hidden; border-radius: 10px; background: #151515; }
+.top-rated-slide { display: grid; grid-template-columns: minmax(220px, 32%) 1fr; min-height: 320px; background: linear-gradient(110deg, #171717, #080808); }
+.top-rated-slide > img { width: 100%; height: 100%; min-height: 320px; max-height: 420px; object-fit: cover; background: #252525; }
+.top-rated-info { display: flex; flex-direction: column; justify-content: center; padding: 32px clamp(20px, 5vw, 60px); }
+.top-rated-info .eyebrow { color: #ffc400; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.top-rated-info h3 { margin: 10px 0; font-size: clamp(26px, 4vw, 42px); }
+.top-rated-info p { color: #bbb; line-height: 1.6; }
+.top-rated-controls { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
+.top-rated-controls button { background: #222; color: white; border: 1px solid #444; }
+.top-rated-controls button:hover { background: #e50914; }
+.top-rated-controls [data-slide-count] { min-width: 52px; color: #aaa; text-align: center; }
+.top-rated-empty { padding: 36px 20px; color: #aaa; text-align: center; }
 .section h2::after { content: ""; position: absolute; left: 0; bottom: -8px; width: 46px; height: 3px; background: #e50914; }
 .search { width: 100%; max-width: 400px; padding: 13px; background: #202020; border: 1px solid #444; border-radius: 5px; color: white; margin-bottom: 25px; font-size: 15px; }
 .movies { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
@@ -130,6 +142,9 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     #player { max-height: 65vh; }
     .video-display-controls { top: 6px; right: 6px; gap: 6px; }
     .video-display-controls button { min-height: 44px; padding: 8px; font-size: 12px; }
+    .top-rated-slide { grid-template-columns: 1fr; }
+    .top-rated-slide > img { height: 210px; min-height: 0; }
+    .top-rated-info { padding: 20px; }
 }
 </style>
 </head>
@@ -160,6 +175,14 @@ document.addEventListener("click", event => {
     <h1>Unlimited Entertainment.</h1>
     <p>Discover movies. Enjoy your favourite entertainment.</p>
     <button class="red" style="width:140px" type="button" onclick="document.getElementById('movies').scrollIntoView()">Explore Movies</button>
+</section>
+
+<section class="section" id="topRated">
+    <h2>Top Rated Movies</h2>
+    <div class="top-rated-slideshow" id="topRatedSlideshow" aria-live="polite">
+        <div class="top-rated-empty">Loading community ratings…</div>
+    </div>
+    <div class="top-rated-controls" id="topRatedControls"></div>
 </section>
 
 <section class="section" id="movies">
@@ -281,6 +304,13 @@ if (window.supabase && typeof window.supabase.createClient === "function") {
 }
 let movies = JSON.parse(localStorage.getItem("gigsflix_movies") || "[]");
 let isAdmin = false;
+let sharedRatingStats = new Map();
+let visitorMovieRatings = {};
+let ratingLoadError = "";
+let topRatedMovies = [];
+let topRatedIndex = 0;
+let topRatedTimer = null;
+let topRatedPaused = false;
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
@@ -602,6 +632,7 @@ async function addMovie(event) {
         event.target.reset();
         await renderMovies();
         await renderAnimationMovies();
+        await renderTopRatedSlideshow();
         renderAdminMovies();
         alert("Movie successfully added to GIGSFLIX!");
     } catch (error) {
@@ -621,6 +652,112 @@ function setMovieRating(movieId, rating) {
     const ratings = getMovieRatings();
     ratings[String(movieId)] = rating;
     localStorage.setItem("gigsflix_ratings", JSON.stringify(ratings));
+}
+
+function getRatingVisitorId() {
+    const key = "gigsflix_rating_visitor_id";
+    let visitorId = localStorage.getItem(key);
+    if (!visitorId) {
+        visitorId = crypto.randomUUID();
+        localStorage.setItem(key, visitorId);
+    }
+    return visitorId;
+}
+
+function getMovieRatingSummary(movieId) {
+    return sharedRatingStats.get(String(movieId)) || { average: 0, count: 0 };
+}
+
+function getMovieRatingLabel(movieId) {
+    const { average, count } = getMovieRatingSummary(movieId);
+    return count ? `${average.toFixed(1)}/5 · ${count} rating${count === 1 ? "" : "s"}` : "No community ratings yet";
+}
+
+async function loadSharedRatings() {
+    sharedRatingStats = new Map();
+    visitorMovieRatings = {};
+    if (!gigsSupabase) {
+        ratingLoadError = "Shared ratings are unavailable because the database client did not load.";
+        return;
+    }
+
+    const { data, error } = await gigsSupabase
+        .from("movie_ratings")
+        .select("movie_id,voter_id,rating");
+
+    if (error) {
+        console.warn("Shared movie ratings could not be loaded:", error.message);
+        ratingLoadError = error.message.toLowerCase().includes("movie_ratings")
+            ? "Run the updated supabase_setup.sql in Supabase SQL Editor to enable shared ratings."
+            : "Shared movie ratings could not be loaded. Please try again later.";
+        return;
+    }
+
+    ratingLoadError = "";
+    const voterId = getRatingVisitorId();
+    const allRatings = data || [];
+    const existingVisitorVotes = new Set(
+        allRatings.filter(item => item.voter_id === voterId).map(item => String(item.movie_id))
+    );
+    const legacyRatings = getMovieRatings();
+    const currentMovieIds = new Set(movies.map(movie => String(movie.id)));
+    const ratingsToMigrate = Object.entries(legacyRatings)
+        .filter(([movieId, rating]) =>
+            currentMovieIds.has(movieId) &&
+            !existingVisitorVotes.has(movieId) &&
+            Number.isInteger(Number(rating)) &&
+            Number(rating) >= 1 &&
+            Number(rating) <= 5
+        )
+        .map(([movieId, rating]) => ({
+            movie_id: movieId,
+            voter_id: voterId,
+            rating: Number(rating)
+        }));
+
+    if (ratingsToMigrate.length) {
+        const { error: migrationError } = await gigsSupabase
+            .from("movie_ratings")
+            .upsert(ratingsToMigrate, { onConflict: "movie_id,voter_id" });
+        if (migrationError) {
+            console.warn("Previously saved ratings could not be shared:", migrationError.message);
+        } else {
+            allRatings.push(...ratingsToMigrate);
+        }
+    }
+
+    sharedRatingStats = new Map();
+    visitorMovieRatings = {};
+    for (const item of allRatings) {
+        const movieId = String(item.movie_id);
+        const rating = Number(item.rating);
+        if (!Number.isInteger(rating) || rating < 1 || rating > 5) continue;
+
+        const stats = sharedRatingStats.get(movieId) || { total: 0, count: 0, average: 0 };
+        stats.total += rating;
+        stats.count++;
+        stats.average = stats.total / stats.count;
+        sharedRatingStats.set(movieId, stats);
+
+        if (item.voter_id === voterId) visitorMovieRatings[movieId] = rating;
+    }
+}
+
+async function saveSharedMovieRating(movieId, rating) {
+    if (!gigsSupabase) throw new Error("The shared ratings service is unavailable.");
+
+    const { error } = await gigsSupabase
+        .from("movie_ratings")
+        .upsert({
+            movie_id: String(movieId),
+            voter_id: getRatingVisitorId(),
+            rating
+        }, { onConflict: "movie_id,voter_id" });
+    if (error) throw error;
+
+    setMovieRating(movieId, rating);
+    await loadSharedRatings();
+    if (ratingLoadError) throw new Error("Your rating was saved, but community totals could not be refreshed.");
 }
 
 async function getPosterSource(movie) {
@@ -686,7 +823,11 @@ async function createMovieCard(movie, displayTitle = movie.title, metadata = mov
     rating.className = "rating";
     rating.setAttribute("aria-label", `Rate ${movie.title}`);
 
-    const savedRating = Number(getMovieRatings()[String(movie.id)] || 0);
+    const savedRating = Number(
+        visitorMovieRatings[String(movie.id)] ||
+        getMovieRatings()[String(movie.id)] ||
+        0
+    );
     const starButtons = [];
 
     for (let star = 1; star <= 5; star++) {
@@ -698,13 +839,24 @@ async function createMovieCard(movie, displayTitle = movie.title, metadata = mov
 
         if (star <= savedRating) starButton.classList.add("active");
 
-        starButton.onclick = event => {
+        starButton.onclick = async event => {
             event.stopPropagation();
-            setMovieRating(movie.id, star);
-            starButtons.forEach((button, index) => {
-                button.classList.toggle("active", index < star);
-            });
-            ratingValue.textContent = `${star}/5`;
+            starButtons.forEach(button => { button.disabled = true; });
+            ratingValue.textContent = "Saving rating…";
+            try {
+                await saveSharedMovieRating(movie.id, star);
+                starButtons.forEach((button, index) => {
+                    button.classList.toggle("active", index < star);
+                });
+                ratingValue.textContent = getMovieRatingLabel(movie.id);
+                await renderTopRatedSlideshow();
+            } catch (error) {
+                console.error("Movie rating could not be saved:", error);
+                ratingValue.textContent = "Rating failed";
+                alert("Your rating could not be saved. " + (error.message || "Please try again."));
+            } finally {
+                starButtons.forEach(button => { button.disabled = false; });
+            }
         };
 
         starButtons.push(starButton);
@@ -713,7 +865,7 @@ async function createMovieCard(movie, displayTitle = movie.title, metadata = mov
 
     const ratingValue = document.createElement("span");
     ratingValue.className = "rating-value";
-    ratingValue.textContent = savedRating ? `${savedRating}/5` : "Rate";
+    ratingValue.textContent = getMovieRatingLabel(movie.id);
     rating.appendChild(ratingValue);
 
     info.append(title, genre, rating, play);
@@ -742,6 +894,113 @@ function getSeriesEpisode(movie) {
     }
 
     return null;
+}
+
+function startTopRatedTimer() {
+    clearInterval(topRatedTimer);
+    if (topRatedMovies.length < 2 || topRatedPaused ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    topRatedTimer = setInterval(() => {
+        topRatedIndex = (topRatedIndex + 1) % topRatedMovies.length;
+        renderTopRatedSlideshow();
+    }, 7000);
+}
+
+async function renderTopRatedSlideshow() {
+    const slideshow = document.getElementById("topRatedSlideshow");
+    const controls = document.getElementById("topRatedControls");
+    clearInterval(topRatedTimer);
+    topRatedTimer = null;
+    slideshow.replaceChildren();
+    controls.replaceChildren();
+
+    topRatedMovies = movies
+        .filter(movie => movie.allowRatings !== false && !getSeriesEpisode(movie))
+        .map(movie => ({ movie, stats: getMovieRatingSummary(movie.id) }))
+        .filter(item => item.stats.count > 0 && item.stats.average >= 5)
+        .sort((a, b) => b.stats.average - a.stats.average || b.stats.count - a.stats.count);
+
+    if (!topRatedMovies.length) {
+        const message = document.createElement("div");
+        message.className = "top-rated-empty";
+        message.textContent = ratingLoadError
+            ? "Community ratings are unavailable. " + ratingLoadError
+            : "Movies with a 5-star community rating will appear here.";
+        slideshow.appendChild(message);
+        topRatedIndex = 0;
+        return;
+    }
+
+    topRatedIndex %= topRatedMovies.length;
+    const { movie, stats } = topRatedMovies[topRatedIndex];
+    const slide = document.createElement("article");
+    slide.className = "top-rated-slide";
+
+    const poster = document.createElement("img");
+    poster.alt = `${movie.title} poster`;
+    const posterSource = await getPosterSource(movie);
+    if (posterSource) poster.src = posterSource;
+    poster.onerror = function() { this.style.display = "none"; };
+
+    const details = document.createElement("div");
+    details.className = "top-rated-info";
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = `★ ${stats.average.toFixed(1)} / 5 · ${stats.count} rating${stats.count === 1 ? "" : "s"}`;
+    const title = document.createElement("h3");
+    title.textContent = movie.title;
+    const description = document.createElement("p");
+    description.textContent = movie.description || "";
+    const watchButton = document.createElement("button");
+    watchButton.type = "button";
+    watchButton.className = "red";
+    watchButton.style.marginTop = "18px";
+    watchButton.textContent = "WATCH NOW";
+    watchButton.onclick = () => playMovie(movie.id);
+    details.append(eyebrow, title, description, watchButton);
+    slide.append(poster, details);
+    slide.addEventListener("mouseenter", () => {
+        clearInterval(topRatedTimer);
+        topRatedTimer = null;
+    });
+    slide.addEventListener("mouseleave", startTopRatedTimer);
+    slideshow.appendChild(slide);
+
+    if (topRatedMovies.length < 2) return;
+
+    const previous = document.createElement("button");
+    previous.type = "button";
+    previous.textContent = "Previous";
+    previous.setAttribute("aria-label", "Show previous top-rated movie");
+    previous.onclick = () => {
+        topRatedIndex = (topRatedIndex - 1 + topRatedMovies.length) % topRatedMovies.length;
+        renderTopRatedSlideshow();
+    };
+
+    const pause = document.createElement("button");
+    pause.type = "button";
+    pause.textContent = topRatedPaused ? "Play slideshow" : "Pause slideshow";
+    pause.setAttribute("aria-label", pause.textContent);
+    pause.onclick = () => {
+        topRatedPaused = !topRatedPaused;
+        renderTopRatedSlideshow();
+    };
+
+    const count = document.createElement("span");
+    count.dataset.slideCount = "";
+    count.textContent = `${topRatedIndex + 1} / ${topRatedMovies.length}`;
+
+    const next = document.createElement("button");
+    next.type = "button";
+    next.textContent = "Next";
+    next.setAttribute("aria-label", "Show next top-rated movie");
+    next.onclick = () => {
+        topRatedIndex = (topRatedIndex + 1) % topRatedMovies.length;
+        renderTopRatedSlideshow();
+    };
+    controls.append(previous, pause, count, next);
+    startTopRatedTimer();
 }
 
 function matchesSearch(movie, search) {
@@ -890,6 +1149,7 @@ async function deleteMovie(id) {
         saveMovies();
         await renderMovies();
         await renderAnimationMovies();
+        await renderTopRatedSlideshow();
         renderAdminMovies();
     }
 }
@@ -1003,10 +1263,17 @@ player.addEventListener("error", () => {
     playerError.style.display = "block";
 });
 
-loadPublicMovies().finally(() => {
-    renderMovies();
-    renderAnimationMovies();
-});
+loadPublicMovies()
+    .then(loadSharedRatings)
+    .catch(error => {
+        console.error("Shared ratings initialization failed:", error);
+        ratingLoadError = "Shared ratings could not be initialized. Please try again later.";
+    })
+    .finally(() => {
+        renderMovies();
+        renderAnimationMovies();
+        renderTopRatedSlideshow();
+    });
 </script>
 </body>
 </html>
