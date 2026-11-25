@@ -85,9 +85,11 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 .video-stage { position: relative; width: 100%; max-height: 70vh; aspect-ratio: 16 / 9; background: #000; }
 #player { display: block; width: 100%; height: 100%; max-height: 70vh; object-fit: contain; background: black; }
 .video-stage.fill-screen #player { object-fit: cover; }
-.video-display-controls { position: absolute; z-index: 2; top: 10px; right: 10px; display: flex; gap: 8px; }
+.video-display-controls { position: absolute; z-index: 2; top: 10px; right: 10px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: calc(100% - 20px); }
 .video-display-controls button { min-height: 44px; padding: 9px 12px; background: rgba(20,20,20,.88); color: white; border: 1px solid rgba(255,255,255,.35); }
 .video-display-controls button:hover { background: #e50914; }
+.video-quality-control { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 8px; border: 1px solid rgba(255,255,255,.35); border-radius: 5px; background: rgba(20,20,20,.88); color: white; font-size: 12px; }
+.video-display-controls .video-quality-control select { width: auto; min-height: 36px; margin: 0; padding: 6px; border: 1px solid #555; border-radius: 4px; background: #292929; color: white; font-size: 12px; }
 #videoStage:fullscreen, #videoStage:-webkit-full-screen { width: 100vw; height: 100vh; height: 100dvh; max-height: none; aspect-ratio: auto; }
 #videoStage:fullscreen #player, #videoStage:-webkit-full-screen #player { width: 100%; height: 100%; max-height: none; }
 #playerError { display: none; color: #ff7777; margin-top: 12px; }
@@ -307,6 +309,10 @@ document.addEventListener("click", event => {
         <div class="video-stage" id="videoStage">
             <video id="player" controls playsinline></video>
             <div class="video-display-controls" role="group" aria-label="Video display settings">
+                <label class="video-quality-control" id="videoQualityControl" style="display:none">
+                    Quality
+                    <select id="videoQualitySelect" aria-label="Video quality"></select>
+                </label>
                 <button id="fitModeButton" type="button" aria-pressed="false" onclick="toggleVideoFit()">Fit: Show all</button>
                 <button id="fullscreenButton" type="button" aria-pressed="false" onclick="toggleVideoFullscreen()">Full Screen</button>
             </div>
@@ -326,6 +332,7 @@ const SUPABASE_URL = "https://lpyimytnzilipwtdjiok.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uUS65L2jiv0ewY_YL-eRDQ_GN1Jh2ht";
 const SUPABASE_BUCKET = "gigsflix-media";
 const PREVIEW_DURATION_SECONDS = 30;
+const HLS_MIME_TYPE = "application/vnd.apple.mpegurl";
 let gigsSupabase = null;
 if (window.supabase && typeof window.supabase.createClient === "function") {
     gigsSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -344,6 +351,9 @@ let movieBackdropIndex = 0;
 let movieBackdropTimer = null;
 let hoveredBackdropSource = "";
 let previewEndTime = null;
+let hlsPlayer = null;
+let hlsLibraryPromise = null;
+let playerRequestId = 0;
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
@@ -1314,25 +1324,181 @@ async function deleteMovie(id) {
     }
 }
 
+function isHlsSource(source) {
+    return /\.m3u8(?:[?#]|$)/i.test(source);
+}
+
+function hideVideoQualityControl() {
+    const control = document.getElementById("videoQualityControl");
+    const select = document.getElementById("videoQualitySelect");
+    control.style.display = "none";
+    select.replaceChildren();
+    select.onchange = null;
+}
+
+function showPlayerStatus(message) {
+    const status = document.getElementById("playerStatus");
+    status.textContent = message;
+    status.style.display = "block";
+}
+
+function loadHlsLibrary() {
+    if (typeof window.Hls === "function") return Promise.resolve(window.Hls);
+    if (hlsLibraryPromise) return hlsLibraryPromise;
+
+    hlsLibraryPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js";
+        script.onload = () => {
+            if (typeof window.Hls === "function") {
+                resolve(window.Hls);
+                return;
+            }
+            hlsLibraryPromise = null;
+            reject(new Error("Adaptive quality support could not be loaded."));
+        };
+        script.onerror = () => {
+            hlsLibraryPromise = null;
+            reject(new Error("Adaptive quality support could not be loaded."));
+        };
+        document.head.appendChild(script);
+    });
+
+    return hlsLibraryPromise;
+}
+
+function startPlayerPlayback(playerError, requestId) {
+    player.play().catch(() => {
+        if (requestId !== playerRequestId) return;
+        player.controls = true;
+        playerError.textContent = "Press the play button to start this movie.";
+        playerError.style.display = "block";
+    });
+}
+
+function renderVideoQualityOptions(hlsInstance) {
+    const control = document.getElementById("videoQualityControl");
+    const select = document.getElementById("videoQualitySelect");
+    const levels = hlsInstance.levels || [];
+    select.replaceChildren();
+
+    if (levels.length < 2) {
+        control.style.display = "none";
+        showPlayerStatus("Only one video quality is available for this title.");
+        return;
+    }
+
+    const automatic = document.createElement("option");
+    automatic.value = "-1";
+    automatic.textContent = "Auto";
+    select.appendChild(automatic);
+
+    levels
+        .map((level, index) => ({ level, index }))
+        .sort((a, b) => a.level.height - b.level.height || a.level.bitrate - b.level.bitrate)
+        .forEach(({ level, index }) => {
+            const option = document.createElement("option");
+            option.value = String(index);
+            const bitrate = Math.round(level.bitrate / 1000);
+            option.textContent = level.height
+                ? `${level.height}p${bitrate ? ` (${bitrate} kbps)` : ""}`
+                : bitrate ? `${bitrate} kbps` : "Video quality";
+            select.appendChild(option);
+        });
+
+    select.value = "-1";
+    select.onchange = () => {
+        if (hlsPlayer === hlsInstance) hlsInstance.currentLevel = Number(select.value);
+    };
+    control.style.display = "flex";
+    document.getElementById("playerStatus").style.display = "none";
+}
+
+async function playAdaptiveStream(source, requestId, playerError) {
+    let HlsConstructor;
+    try {
+        HlsConstructor = await loadHlsLibrary();
+    } catch (error) {
+        if (requestId !== playerRequestId) return;
+        if (!player.canPlayType(HLS_MIME_TYPE)) throw error;
+        player.src = source;
+        player.load();
+        showPlayerStatus("This browser is selecting the video quality automatically.");
+        startPlayerPlayback(playerError, requestId);
+        return;
+    }
+
+    if (requestId !== playerRequestId) return;
+    if (!HlsConstructor.isSupported()) {
+        if (!player.canPlayType(HLS_MIME_TYPE)) {
+            throw new Error("Adaptive video playback is not supported by this browser.");
+        }
+        player.src = source;
+        player.load();
+        showPlayerStatus("This browser is selecting the video quality automatically.");
+        startPlayerPlayback(playerError, requestId);
+        return;
+    }
+
+    const instance = new HlsConstructor();
+    hlsPlayer = instance;
+    instance.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
+        if (requestId !== playerRequestId || hlsPlayer !== instance) return;
+        renderVideoQualityOptions(instance);
+        startPlayerPlayback(playerError, requestId);
+    });
+    instance.on(HlsConstructor.Events.ERROR, (event, data) => {
+        if (!data.fatal || requestId !== playerRequestId || hlsPlayer !== instance) return;
+        playerError.textContent = "The adaptive video stream could not be played.";
+        playerError.style.display = "block";
+        document.getElementById("playerStatus").style.display = "none";
+        hideVideoQualityControl();
+        instance.destroy();
+        hlsPlayer = null;
+    });
+    instance.loadSource(source);
+    instance.attachMedia(player);
+}
+
+async function loadPlayerSource(source, requestId, playerError) {
+    if (isHlsSource(source)) {
+        showPlayerStatus("Loading available video qualities…");
+        await playAdaptiveStream(source, requestId, playerError);
+        return;
+    }
+
+    player.src = source;
+    player.load();
+    showPlayerStatus("Only one video quality is available for this title.");
+    startPlayerPlayback(playerError, requestId);
+}
+
 async function playMovie(id, preview = false) {
     const movie = movies.find(m => m.id === id);
     if (!movie) return;
 
     const player = document.getElementById("player");
     const playerError = document.getElementById("playerError");
-    const playerStatus = document.getElementById("playerStatus");
+    const requestId = ++playerRequestId;
 
     previewEndTime = preview ? PREVIEW_DURATION_SECONDS : null;
     player.controls = true;
-    playerStatus.style.display = "none";
+    hideVideoQualityControl();
+    document.getElementById("playerStatus").style.display = "none";
     document.getElementById("playerTitle").textContent =
         preview ? `Preview: ${movie.title}` : movie.title;
     document.getElementById("playerDescription").textContent = movie.description;
     playerError.style.display = "none";
+    player.pause();
+    if (hlsPlayer) {
+        hlsPlayer.destroy();
+        hlsPlayer = null;
+    }
 
     let source = movie.video;
     if (movie.videoBlob) {
         const videoFile = await getMedia(movie.id, "video");
+        if (requestId !== playerRequestId) return;
         if (!videoFile) {
             playerError.textContent = "The stored video file could not be found.";
             playerError.style.display = "block";
@@ -1352,15 +1518,16 @@ async function playMovie(id, preview = false) {
     player.pause();
     player.removeAttribute("src");
     player.load();
-    player.src = source;
     document.getElementById("videoModal").style.display = "block";
-    player.load();
 
-    player.play().catch(() => {
-        player.controls = true;
-        playerError.textContent = "Press the play button to start this movie.";
+    try {
+        await loadPlayerSource(source, requestId, playerError);
+    } catch (error) {
+        if (requestId !== playerRequestId) return;
+        playerError.textContent = error.message || "The video could not be loaded.";
         playerError.style.display = "block";
-    });
+        document.getElementById("playerStatus").style.display = "none";
+    }
 }
 
 function stopPreviewAtLimit() {
@@ -1376,8 +1543,14 @@ function stopPreviewAtLimit() {
 
 function closePlayer() {
     setMovieBackdrop("");
+    playerRequestId++;
     previewEndTime = null;
     const player = document.getElementById("player");
+    if (hlsPlayer) {
+        hlsPlayer.destroy();
+        hlsPlayer = null;
+    }
+    hideVideoQualityControl();
     player.pause();
     if (player.src.startsWith("blob:")) URL.revokeObjectURL(player.src);
     player.removeAttribute("src");
