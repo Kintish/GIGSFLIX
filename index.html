@@ -51,6 +51,7 @@ footer { background: #111; padding: 30px; text-align: center; color: #888; margi
 footer button { background: transparent; color: #aaa; margin-top: 15px; }
 .modal { display: none; position: fixed; z-index: 100; inset: 0; background: rgba(0,0,0,.93); overflow-y: auto; padding: 25px 12px; }
 .modal-content { background: #181818; max-width: 550px; margin: 30px auto; padding: 25px; border-radius: 10px; position: relative; }
+.video-modal-content { max-width: 1000px; }
 .close { position: absolute; right: 15px; top: 12px; font-size: 25px; color: white; background: transparent; }
 .modal h2 { margin-bottom: 22px; color: #e50914; }
 .modal input, .modal textarea, .modal select { width: 100%; padding: 13px; margin-bottom: 14px; background: #292929; border: 1px solid #444; color: white; border-radius: 5px; font-size: 14px; }
@@ -58,7 +59,14 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 .full { width: 100%; margin-bottom: 10px; }
 .admin-movie { background: #292929; padding: 12px; border-radius: 5px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .delete { background: #b00000; color: white; }
-#player { width: 100%; max-height: 65vh; background: black; }
+.video-stage { position: relative; width: 100%; max-height: 70vh; aspect-ratio: 16 / 9; background: #000; }
+#player { display: block; width: 100%; height: 100%; max-height: 70vh; object-fit: contain; background: black; }
+.video-stage.fill-screen #player { object-fit: cover; }
+.video-display-controls { position: absolute; z-index: 2; top: 10px; right: 10px; display: flex; gap: 8px; }
+.video-display-controls button { min-height: 44px; padding: 9px 12px; background: rgba(20,20,20,.88); color: white; border: 1px solid rgba(255,255,255,.35); }
+.video-display-controls button:hover { background: #e50914; }
+#videoStage:fullscreen, #videoStage:-webkit-full-screen { width: 100vw; height: 100vh; height: 100dvh; max-height: none; aspect-ratio: auto; }
+#videoStage:fullscreen #player, #videoStage:-webkit-full-screen #player { width: 100%; height: 100%; max-height: none; }
 #playerError { display: none; color: #ff7777; margin-top: 12px; }
 .player-title { margin: 15px 0; }
 .movie-backdrop { position: fixed; z-index: -3; inset: 0; opacity: 0; background: #080808 center / cover no-repeat; transition: opacity .55s ease, transform 8s ease; transform: scale(1); }
@@ -100,6 +108,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     .search { max-width: none; }
     .modal { padding: 10px 8px; }
     .modal-content { margin: 10px auto; max-height: calc(100dvh - 20px); overflow-y: auto; padding: 20px 16px; }
+    .video-modal-content { margin: 0 auto; max-height: calc(100dvh - 20px); padding: 60px 10px 18px; }
     .close { position: sticky; float: right; width: 44px; height: 44px; margin: -10px -8px 0 0; }
     .admin-movie { align-items: stretch; }
     .admin-movie span { min-width: 0; overflow-wrap: anywhere; }
@@ -117,6 +126,10 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     .movie-info { padding: 10px; }
     .movie-info h3 { font-size: 14px; }
     .movie-info button { padding: 8px 6px; font-size: 12px; }
+    .video-stage { max-height: 65vh; }
+    #player { max-height: 65vh; }
+    .video-display-controls { top: 6px; right: 6px; gap: 6px; }
+    .video-display-controls button { min-height: 44px; padding: 8px; font-size: 12px; }
 }
 </style>
 </head>
@@ -240,9 +253,15 @@ document.addEventListener("click", event => {
 </div>
 
 <div class="modal" id="videoModal">
-    <div class="modal-content" style="max-width:850px">
+    <div class="modal-content video-modal-content">
         <button class="close" type="button" onclick="closePlayer()">&times;</button>
-        <video id="player" controls playsinline></video>
+        <div class="video-stage" id="videoStage">
+            <video id="player" controls playsinline></video>
+            <div class="video-display-controls" role="group" aria-label="Video display settings">
+                <button id="fitModeButton" type="button" aria-pressed="false" onclick="toggleVideoFit()">Fit: Show all</button>
+                <button id="fullscreenButton" type="button" aria-pressed="false" onclick="toggleVideoFullscreen()">Full Screen</button>
+            </div>
+        </div>
         <p id="playerError"></p>
         <h2 class="player-title" id="playerTitle"></h2>
         <p id="playerDescription" style="color:#aaa"></p>
@@ -931,6 +950,52 @@ function closePlayer() {
 }
 
 const player = document.getElementById("player");
+const videoStage = document.getElementById("videoStage");
+const fullscreenButton = document.getElementById("fullscreenButton");
+const fitModeButton = document.getElementById("fitModeButton");
+
+function updateFullscreenButton() {
+    const isFullscreen = document.fullscreenElement === videoStage ||
+        document.webkitFullscreenElement === videoStage ||
+        player.webkitDisplayingFullscreen === true;
+    fullscreenButton.textContent = isFullscreen ? "Exit Full Screen" : "Full Screen";
+    fullscreenButton.setAttribute("aria-pressed", String(isFullscreen));
+}
+
+function toggleVideoFit() {
+    const fillScreen = videoStage.classList.toggle("fill-screen");
+    fitModeButton.textContent = fillScreen ? "Fit: Fill screen" : "Fit: Show all";
+    fitModeButton.setAttribute("aria-pressed", String(fillScreen));
+}
+
+async function toggleVideoFullscreen() {
+    try {
+        const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+        if (player.webkitDisplayingFullscreen && player.webkitExitFullscreen) {
+            player.webkitExitFullscreen();
+        } else if (fullscreenElement === videoStage) {
+            if (document.exitFullscreen) await document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        } else if (videoStage.requestFullscreen) {
+            await videoStage.requestFullscreen();
+        } else if (videoStage.webkitRequestFullscreen) {
+            videoStage.webkitRequestFullscreen();
+        } else if (player.webkitEnterFullscreen) {
+            player.webkitEnterFullscreen();
+        } else {
+            throw new Error("Fullscreen is not supported by this browser.");
+        }
+    } catch (error) {
+        const playerError = document.getElementById("playerError");
+        playerError.textContent = error.message || "Fullscreen could not be opened.";
+        playerError.style.display = "block";
+    }
+}
+
+document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+player.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
+player.addEventListener("webkitendfullscreen", updateFullscreenButton);
 player.addEventListener("error", () => {
     if (!player.currentSrc) return;
     const playerError = document.getElementById("playerError");
