@@ -59,6 +59,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .movie-info { padding: 12px; }
 .movie-info h3 { font-family: "DM Sans", sans-serif; font-size: 16px; line-height: 1.25; margin-bottom: 7px; }
 .movie-info p { font-size: 12px; color: #aaa; }
+.movie-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.movie-actions button { width: 100%; min-width: 0; padding: 10px 6px; font-size: 12px; }
+.preview-button { background: #292929; color: white; border: 1px solid #444; }
+.preview-button:hover { background: #3a3a3a; }
 .empty { color: #888; padding: 50px 10px; text-align: center; grid-column: 1 / -1; background: #151515; border-radius: 8px; }
 footer { background: #111; padding: 30px; text-align: center; color: #888; margin-top: 60px; }
 footer button { background: transparent; color: #aaa; margin-top: 15px; }
@@ -85,6 +89,7 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 #videoStage:fullscreen, #videoStage:-webkit-full-screen { width: 100vw; height: 100vh; height: 100dvh; max-height: none; aspect-ratio: auto; }
 #videoStage:fullscreen #player, #videoStage:-webkit-full-screen #player { width: 100%; height: 100%; max-height: none; }
 #playerError { display: none; color: #ff7777; margin-top: 12px; }
+#playerStatus { display: none; color: #bbb; margin-top: 12px; }
 .player-title { margin: 15px 0; }
 .movie-backdrop { position: fixed; z-index: -1; inset: 0; opacity: 0; background: #080808 center / cover no-repeat; transition: opacity .55s ease, transform 8s ease; transform: scale(1); }
 .movie-backdrop.visible { opacity: .34; transform: scale(1.06); }
@@ -303,6 +308,7 @@ document.addEventListener("click", event => {
             </div>
         </div>
         <p id="playerError"></p>
+        <p id="playerStatus" aria-live="polite"></p>
         <h2 class="player-title" id="playerTitle"></h2>
         <p id="playerDescription" style="color:#aaa"></p>
     </div>
@@ -315,6 +321,7 @@ const DB_STORE = "movies";
 const SUPABASE_URL = "https://lpyimytnzilipwtdjiok.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uUS65L2jiv0ewY_YL-eRDQ_GN1Jh2ht";
 const SUPABASE_BUCKET = "gigsflix-media";
+const PREVIEW_DURATION_SECONDS = 30;
 let gigsSupabase = null;
 if (window.supabase && typeof window.supabase.createClient === "function") {
     gigsSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -332,6 +339,7 @@ let movieBackdropSources = [];
 let movieBackdropIndex = 0;
 let movieBackdropTimer = null;
 let hoveredBackdropSource = "";
+let previewEndTime = null;
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
@@ -862,8 +870,6 @@ async function createMovieCard(movie, displayTitle = movie.title, metadata = mov
 
     const play = document.createElement("button");
     play.className = "red";
-    play.style.width = "100%";
-    play.style.marginTop = "12px";
     play.textContent = "WATCH NOW";
     play.onclick = event => {
         event.stopPropagation();
@@ -871,8 +877,23 @@ async function createMovieCard(movie, displayTitle = movie.title, metadata = mov
         playMovie(movie.id);
     };
 
+    const preview = document.createElement("button");
+    preview.className = "preview-button";
+    preview.textContent = "PREVIEW";
+    preview.title = `Play the first ${PREVIEW_DURATION_SECONDS} seconds`;
+    preview.setAttribute("aria-label", `Play ${PREVIEW_DURATION_SECONDS}-second preview of ${movie.title}`);
+    preview.onclick = event => {
+        event.stopPropagation();
+        setMovieBackdrop(posterSource);
+        playMovie(movie.id, true);
+    };
+
+    const actions = document.createElement("div");
+    actions.className = "movie-actions";
+    actions.append(preview, play);
+
     if (movie.allowRatings === false) {
-        info.append(title, genre, play);
+        info.append(title, genre, actions);
         card.append(image, info);
         return card;
     }
@@ -926,7 +947,7 @@ async function createMovieCard(movie, displayTitle = movie.title, metadata = mov
     ratingValue.textContent = getMovieRatingLabel(movie.id);
     rating.appendChild(ratingValue);
 
-    info.append(title, genre, rating, play);
+    info.append(title, genre, rating, actions);
     card.append(image, info);
     return card;
 }
@@ -1010,13 +1031,23 @@ async function renderTopRatedSlideshow() {
     title.textContent = movie.title;
     const description = document.createElement("p");
     description.textContent = movie.description || "";
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "preview-button";
+    previewButton.textContent = "PREVIEW";
+    previewButton.title = `Play the first ${PREVIEW_DURATION_SECONDS} seconds`;
+    previewButton.setAttribute("aria-label", `Play ${PREVIEW_DURATION_SECONDS}-second preview of ${movie.title}`);
+    previewButton.onclick = () => playMovie(movie.id, true);
     const watchButton = document.createElement("button");
     watchButton.type = "button";
     watchButton.className = "red";
-    watchButton.style.marginTop = "18px";
     watchButton.textContent = "WATCH NOW";
     watchButton.onclick = () => playMovie(movie.id);
-    details.append(eyebrow, title, description, watchButton);
+    const actions = document.createElement("div");
+    actions.className = "movie-actions";
+    actions.style.marginTop = "18px";
+    actions.append(previewButton, watchButton);
+    details.append(eyebrow, title, description, actions);
     slide.append(poster, details);
     slide.addEventListener("mouseenter", () => {
         clearInterval(topRatedTimer);
@@ -1279,14 +1310,19 @@ async function deleteMovie(id) {
     }
 }
 
-async function playMovie(id) {
+async function playMovie(id, preview = false) {
     const movie = movies.find(m => m.id === id);
     if (!movie) return;
 
     const player = document.getElementById("player");
     const playerError = document.getElementById("playerError");
+    const playerStatus = document.getElementById("playerStatus");
 
-    document.getElementById("playerTitle").textContent = movie.title;
+    previewEndTime = preview ? PREVIEW_DURATION_SECONDS : null;
+    player.controls = true;
+    playerStatus.style.display = "none";
+    document.getElementById("playerTitle").textContent =
+        preview ? `Preview: ${movie.title}` : movie.title;
     document.getElementById("playerDescription").textContent = movie.description;
     playerError.style.display = "none";
 
@@ -1323,14 +1359,27 @@ async function playMovie(id) {
     });
 }
 
+function stopPreviewAtLimit() {
+    if (previewEndTime === null || player.currentTime < previewEndTime) return;
+
+    player.pause();
+    player.currentTime = previewEndTime;
+    const playerStatus = document.getElementById("playerStatus");
+    playerStatus.textContent =
+        `${PREVIEW_DURATION_SECONDS}-second preview finished. Close the player and choose WATCH NOW for full playback.`;
+    playerStatus.style.display = "block";
+}
+
 function closePlayer() {
     setMovieBackdrop("");
+    previewEndTime = null;
     const player = document.getElementById("player");
     player.pause();
     if (player.src.startsWith("blob:")) URL.revokeObjectURL(player.src);
     player.removeAttribute("src");
     player.load();
     document.getElementById("playerError").style.display = "none";
+    document.getElementById("playerStatus").style.display = "none";
     closeModal("videoModal");
 }
 
@@ -1381,6 +1430,8 @@ document.addEventListener("fullscreenchange", updateFullscreenButton);
 document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 player.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
 player.addEventListener("webkitendfullscreen", updateFullscreenButton);
+player.addEventListener("timeupdate", stopPreviewAtLimit);
+player.addEventListener("seeking", stopPreviewAtLimit);
 player.addEventListener("error", () => {
     if (!player.currentSrc) return;
     const playerError = document.getElementById("playerError");
