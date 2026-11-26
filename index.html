@@ -52,7 +52,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .movies { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
 .series-list { display: flex; flex-direction: column; gap: 28px; }
 .series-group { padding: 20px; background: rgba(21,21,21,.92); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; }
-.series-group > h3 { margin-bottom: 16px; font-size: 23px; }
+.series-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.series-heading img { flex: 0 0 90px; width: 90px; height: 135px; border-radius: 5px; object-fit: cover; background: #252525; }
+.series-heading h3 { margin: 0; font-size: 23px; }
 .season-group { overflow: hidden; border-radius: 6px; background: rgba(255,255,255,.035); }
 .season-group + .season-group { margin-top: 12px; }
 .season-group summary { display: flex; align-items: center; justify-content: space-between; padding: 14px; background: #242424; color: #ddd; cursor: pointer; font-weight: 700; list-style: none; }
@@ -1233,11 +1235,28 @@ async function renderSeriesMovies(search = "") {
     for (const group of groups.values()) {
         const section = document.createElement("section");
         section.className = "series-group";
-        const heading = document.createElement("h3");
-        heading.textContent = group.title;
-        section.appendChild(heading);
-
         const seasons = Array.from(group.seasons.entries()).sort((a, b) => a[0] - b[0]);
+        const representative = seasons
+            .flatMap(([, episodes]) => episodes.slice().sort((a, b) => a.episode.episode - b.episode.episode))
+            .find(item => item.movie.poster || item.movie.posterBlob);
+        const seriesHeading = document.createElement("div");
+        seriesHeading.className = "series-heading";
+        if (representative) {
+            const posterSource = await getPosterSource(representative.movie);
+            if (posterSource) {
+                const poster = document.createElement("img");
+                poster.src = posterSource;
+                poster.alt = `${group.title} poster`;
+                poster.loading = "lazy";
+                poster.onerror = function() { this.style.display = "none"; };
+                seriesHeading.appendChild(poster);
+            }
+        }
+        const titleHeading = document.createElement("h3");
+        titleHeading.textContent = group.title;
+        seriesHeading.appendChild(titleHeading);
+        section.appendChild(seriesHeading);
+
         for (const [seasonNumber, episodes] of seasons) {
             const season = document.createElement("details");
             season.className = "season-group";
