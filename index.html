@@ -1183,7 +1183,10 @@ async function renderMovies() {
     catalogSections.forEach(section => { section.hidden = false; });
 
     const grid = document.getElementById("movieGrid");
-    const filtered = movies.filter(movie => !getSeriesEpisode(movie));
+    const filtered = movies.filter(movie =>
+        !getSeriesEpisode(movie) &&
+        (movie.genre || "").toLowerCase() !== "animations"
+    );
     grid.innerHTML = "";
 
     if (filtered.length === 0) {
