@@ -88,6 +88,21 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
 .modal textarea { height: 90px; resize: vertical; }
 .full { width: 100%; margin-bottom: 10px; }
 .admin-movie { background: #292929; padding: 12px; border-radius: 5px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.analytics-panel { margin: 0 0 28px; padding: 18px; border: 1px solid #333; border-radius: 8px; background: #111; }
+.analytics-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.analytics-header h3 { margin-bottom: 6px; }
+.analytics-header p, .analytics-status { color: #aaa; font-size: 13px; }
+.analytics-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0 22px; }
+.analytics-stat { padding: 13px; border-radius: 6px; background: #202020; }
+.analytics-stat span { display: block; color: #aaa; font-size: 12px; }
+.analytics-stat strong { display: block; margin-top: 4px; font-size: 26px; }
+.analytics-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.analytics-lists h4 { margin-bottom: 8px; }
+.analytics-list { display: grid; gap: 8px; }
+.analytics-item { min-width: 0; padding: 10px; border-radius: 5px; background: #202020; overflow-wrap: anywhere; }
+.analytics-item p { color: #aaa; font-size: 12px; }
+.analytics-item ul { margin: 8px 0 0 18px; color: #ddd; font-size: 13px; }
+.analytics-empty { color: #888; font-size: 13px; }
 .delete { background: #b00000; color: white; }
 .video-stage { position: relative; width: 100%; max-height: 70vh; aspect-ratio: 16 / 9; background: #000; }
 #player { display: block; width: 100%; height: 100%; max-height: 70vh; object-fit: contain; background: black; }
@@ -187,6 +202,9 @@ footer button { background: transparent; color: #aaa; margin-top: 15px; }
     .top-rated-controls button { min-width: 0; padding: 8px 4px; font-size: 12px; line-height: 1.2; white-space: normal; }
     .top-rated-controls button:nth-child(4) { grid-column: 3; grid-row: 1; }
     .top-rated-controls [data-slide-count] { grid-column: 2; grid-row: 2; }
+    .analytics-panel { padding: 14px; }
+    .analytics-header { flex-direction: column; }
+    .analytics-lists { grid-template-columns: 1fr; }
 }
 @media(hover:none) {
     .movie:hover { transform: none; }
@@ -294,6 +312,7 @@ document.addEventListener("click", event => {
 <footer>
     <h2 style="color:#e50914">GIGSFLIX</h2>
     <p style="margin-top:10px">Your entertainment destination.</p>
+    <p style="margin-top:10px">We measure anonymous visits and movie playback starts to understand site usage.</p>
     <p style="margin-top:10px">&copy; 2026 GIGSFLIX. All rights reserved.</p>
     <button type="button" onclick="openLogin()">Administrator Access</button>
 </footer>
@@ -302,12 +321,13 @@ document.addEventListener("click", event => {
     <div class="modal-content">
         <button class="close" type="button" onclick="closeModal('loginModal')">&times;</button>
         <h2>GIGSFLIX ADMIN</h2>
-        <p style="color:#aaa;margin-bottom:20px">Enter your administrator password.</p>
+        <p style="color:#aaa;margin-bottom:20px">Sign in with your authorized administrator account.</p>
         <form onsubmit="login(event)">
-            <input type="password" id="adminPassword" placeholder="Enter admin password" required>
+            <input type="email" id="adminEmail" autocomplete="username" placeholder="Administrator email" required>
+            <input type="password" id="adminPassword" autocomplete="current-password" placeholder="Administrator password" required>
             <button class="red full" type="submit">LOGIN</button>
         </form>
-        <p id="loginError" style="color:red"></p>
+        <p id="loginError" role="alert" style="color:#ff7777"></p>
     </div>
 </div>
 
@@ -315,7 +335,33 @@ document.addEventListener("click", event => {
     <div class="modal-content">
         <button class="close" type="button" onclick="closeAdmin()">&times;</button>
         <h2>ADMIN DASHBOARD</h2>
-        <p style="color:#aaa;margin-bottom:20px">Manage your GIGSFLIX movie collection.</p>
+        <p style="color:#aaa;margin-bottom:20px">Manage your GIGSFLIX collection and private analytics.</p>
+        <section class="analytics-panel" aria-labelledby="analyticsHeading">
+            <div class="analytics-header">
+                <div>
+                    <h3 id="analyticsHeading">Live visitor analytics</h3>
+                    <p>Anonymous per-tab sessions only; analytics records do not store names or IP addresses. Active visitors were seen in the last 2 minutes.</p>
+                </div>
+                <button type="button" onclick="loadAnalytics()">REFRESH</button>
+            </div>
+            <p class="analytics-status" id="analyticsStatus" role="status" aria-live="polite">Waiting for analytics…</p>
+            <div class="analytics-stats">
+                <div class="analytics-stat"><span>Active now</span><strong id="activeVisitorCount">—</strong></div>
+                <div class="analytics-stat"><span>Visitor sessions</span><strong id="totalVisitorCount">—</strong></div>
+                <div class="analytics-stat"><span>Sessions (30 days)</span><strong id="recentVisitorCount">—</strong></div>
+                <div class="analytics-stat"><span>Movie plays</span><strong id="totalMoviePlays">—</strong></div>
+            </div>
+            <div class="analytics-lists">
+                <div>
+                    <h4>Recent visitor sessions</h4>
+                    <div class="analytics-list" id="analyticsVisitors"><p class="analytics-empty">Analytics will appear after setup.</p></div>
+                </div>
+                <div>
+                    <h4>Most played movies</h4>
+                    <div class="analytics-list" id="analyticsTopMovies"><p class="analytics-empty">Analytics will appear after setup.</p></div>
+                </div>
+            </div>
+        </section>
         <h3 style="margin-bottom:15px">Add New Movie</h3>
         <form onsubmit="addMovie(event)">
             <input type="text" id="movieTitle" placeholder="Movie title" required>
@@ -385,12 +431,12 @@ document.addEventListener("click", event => {
 </div>
 
 <script>
-const ADMIN_PASSWORD = "3327";
 const DB_NAME = "gigsflix_media";
 const DB_STORE = "movies";
 const SUPABASE_URL = "https://lpyimytnzilipwtdjiok.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uUS65L2jiv0ewY_YL-eRDQ_GN1Jh2ht";
 const SUPABASE_BUCKET = "gigsflix-media";
+const ANALYTICS_SESSION_KEY = "gigsflix_analytics_session";
 const PREVIEW_DURATION_SECONDS = 30;
 const HLS_MIME_TYPE = "application/vnd.apple.mpegurl";
 let gigsSupabase = null;
@@ -414,6 +460,13 @@ let previewEndTime = null;
 let hlsPlayer = null;
 let hlsLibraryPromise = null;
 let playerRequestId = 0;
+let analyticsVisitorId = null;
+let analyticsChannel = null;
+let analyticsRefreshId = 0;
+let analyticsHeartbeatTimer = null;
+let analyticsWriteError = "";
+let analyticsPlaybackMovie = null;
+let analyticsPlaybackRecorded = false;
 
 function saveMovies() {
     localStorage.setItem("gigsflix_movies", JSON.stringify(movies));
@@ -515,10 +568,12 @@ async function unpublishMovie(movie) {
     if (movie.videoPath) paths.push(movie.videoPath);
 
     if (paths.length) {
-        await gigsSupabase.storage.from(SUPABASE_BUCKET).remove(paths);
+        const { error: storageError } = await gigsSupabase.storage.from(SUPABASE_BUCKET).remove(paths);
+        if (storageError) throw storageError;
     }
 
-    await gigsSupabase.from("movies").delete().eq("id", String(movie.id));
+    const { error } = await gigsSupabase.from("movies").delete().eq("id", String(movie.id));
+    if (error) throw error;
 }
 
 function openMediaDatabase() {
@@ -597,31 +652,274 @@ function closeModal(id) {
     }
 }
 
-function login(event) {
+async function login(event) {
     event.preventDefault();
+    const loginError = document.getElementById("loginError");
+    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+    const email = document.getElementById("adminEmail").value.trim();
     const password = document.getElementById("adminPassword").value;
+    loginError.textContent = "";
 
-    if (password === ADMIN_PASSWORD) {
+    if (!gigsSupabase) {
+        loginError.textContent = "The secure sign-in service is unavailable. Please try again later.";
+        return;
+    }
+
+    submitButton.disabled = true;
+    try {
+        const { error: signInError } = await gigsSupabase.auth.signInWithPassword({ email, password });
+        if (signInError) {
+            loginError.textContent = signInError.message;
+            return;
+        }
+
+        const { data: authorized, error: authorizationError } =
+            await gigsSupabase.rpc("is_gigsflix_admin");
+        if (authorizationError || authorized !== true) {
+            const { error: signOutError } = await gigsSupabase.auth.signOut();
+            if (signOutError) console.error("Unauthorized admin session could not be closed:", signOutError);
+            loginError.textContent = authorizationError
+                ? `Admin access could not be verified (${authorizationError.message}). Confirm the Supabase setup and try again.`
+                : "This account has not been authorized as a GIGSFLIX administrator.";
+            return;
+        }
+
         isAdmin = true;
         closeModal("loginModal");
         document.getElementById("adminPassword").value = "";
-        document.getElementById("loginError").innerText = "";
+        document.getElementById("loginError").textContent = "";
         const adminModal = document.getElementById("adminModal");
         adminModal.style.setProperty("display", "block", "important");
         document.body.style.overflow = "hidden";
         renderAdminMovies();
-    } else {
-        document.getElementById("loginError").innerText = "Incorrect password. Try again.";
+        await loadAnalytics();
+        startAnalyticsRealtime();
+    } catch (error) {
+        console.error("Administrator sign-in failed:", error);
+        loginError.textContent = "Administrator sign-in failed. Check your connection and Supabase setup.";
+    } finally {
+        submitButton.disabled = false;
     }
 }
 
 function closeAdmin() {
+    isAdmin = false;
+    analyticsRefreshId++;
+    stopAnalyticsRealtime();
     closeModal("adminModal");
 }
 
-function logout() {
-    isAdmin = false;
+async function logout() {
     closeAdmin();
+    if (!gigsSupabase) return;
+
+    const { error } = await gigsSupabase.auth.signOut();
+    if (error) {
+        console.error("Administrator sign-out failed:", error);
+        alert("You were signed out of the dashboard, but the Supabase session could not be closed.");
+    }
+}
+
+function getAnalyticsVisitorId() {
+    if (analyticsVisitorId) return analyticsVisitorId;
+
+    try {
+        analyticsVisitorId = sessionStorage.getItem(ANALYTICS_SESSION_KEY);
+    } catch (error) {
+        console.warn("Session storage is unavailable for anonymous analytics:", error);
+    }
+
+    if (!analyticsVisitorId) {
+        analyticsVisitorId = crypto.randomUUID();
+        try {
+            sessionStorage.setItem(ANALYTICS_SESSION_KEY, analyticsVisitorId);
+        } catch (error) {
+            console.warn("The anonymous analytics session could not be saved:", error);
+        }
+    }
+    return analyticsVisitorId;
+}
+
+async function recordVisitorEvent(eventType, movie = null) {
+    if (!gigsSupabase) return;
+
+    const event = {
+        visitor_id: getAnalyticsVisitorId(),
+        event_type: eventType
+    };
+    if (movie) {
+        event.movie_id = String(movie.id);
+        event.movie_title = String(movie.title).slice(0, 200);
+    }
+
+    try {
+        const { error } = await gigsSupabase
+            .from("visitor_analytics_events")
+            .insert(event);
+        if (error) {
+            if (analyticsWriteError !== error.message) {
+                console.warn("Anonymous visitor activity could not be recorded:", error.message);
+                analyticsWriteError = error.message;
+            }
+        } else {
+            analyticsWriteError = "";
+        }
+    } catch (error) {
+        if (analyticsWriteError !== error.message) {
+            console.warn("Anonymous visitor activity could not be recorded:", error);
+            analyticsWriteError = error.message || "Unknown analytics error";
+        }
+    }
+}
+
+function startVisitorAnalytics() {
+    if (!gigsSupabase || analyticsHeartbeatTimer) return;
+
+    let sessionStarted = false;
+    try {
+        sessionStarted = sessionStorage.getItem(`${ANALYTICS_SESSION_KEY}_started`) === "true";
+    } catch (error) {
+        console.warn("Analytics session state could not be read:", error);
+    }
+
+    if (!sessionStarted) {
+        recordVisitorEvent("session_start");
+        try {
+            sessionStorage.setItem(`${ANALYTICS_SESSION_KEY}_started`, "true");
+        } catch (error) {
+            console.warn("Analytics session state could not be saved:", error);
+        }
+    }
+
+    analyticsHeartbeatTimer = window.setInterval(() => {
+        if (!document.hidden) recordVisitorEvent("heartbeat");
+    }, 60_000);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) recordVisitorEvent("heartbeat");
+    });
+}
+
+function formatAnalyticsCount(value) {
+    const count = Number(value);
+    return Number.isFinite(count) && count >= 0 ? Math.floor(count).toLocaleString() : "0";
+}
+
+function formatAnalyticsDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? "Unknown"
+        : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function renderAnalytics(analytics) {
+    const data = analytics && typeof analytics === "object" ? analytics : {};
+    document.getElementById("activeVisitorCount").textContent = formatAnalyticsCount(data.activeVisitors);
+    document.getElementById("totalVisitorCount").textContent = formatAnalyticsCount(data.totalVisitors);
+    document.getElementById("recentVisitorCount").textContent = formatAnalyticsCount(data.visitorsLast30Days);
+    document.getElementById("totalMoviePlays").textContent = formatAnalyticsCount(data.totalPlays);
+
+    const visitors = document.getElementById("analyticsVisitors");
+    visitors.replaceChildren();
+    if (!Array.isArray(data.recentVisitors) || data.recentVisitors.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "analytics-empty";
+        empty.textContent = "No visitor sessions recorded yet.";
+        visitors.appendChild(empty);
+    } else {
+        data.recentVisitors.forEach(visitor => {
+            const item = document.createElement("article");
+            item.className = "analytics-item";
+            const summary = document.createElement("p");
+            const shortId = String(visitor.visitorId || "unknown").slice(0, 8);
+            summary.textContent =
+                `Visitor ${shortId} · ${formatAnalyticsCount(visitor.plays)} movie plays · Last active ${formatAnalyticsDate(visitor.lastSeen)}`;
+            item.appendChild(summary);
+
+            if (Array.isArray(visitor.movies) && visitor.movies.length) {
+                const watchedMovies = document.createElement("ul");
+                visitor.movies.forEach(movie => {
+                    const watchedMovie = document.createElement("li");
+                    watchedMovie.textContent = `${String(movie.title || "Untitled movie")} · ${formatAnalyticsDate(movie.watchedAt)}`;
+                    watchedMovies.appendChild(watchedMovie);
+                });
+                item.appendChild(watchedMovies);
+            }
+            visitors.appendChild(item);
+        });
+    }
+
+    const topMovies = document.getElementById("analyticsTopMovies");
+    topMovies.replaceChildren();
+    if (!Array.isArray(data.topMovies) || data.topMovies.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "analytics-empty";
+        empty.textContent = "No movie plays recorded yet.";
+        topMovies.appendChild(empty);
+    } else {
+        data.topMovies.forEach(movie => {
+            const item = document.createElement("article");
+            item.className = "analytics-item";
+            item.textContent = `${String(movie.title || "Untitled movie")} · ${formatAnalyticsCount(movie.plays)} plays`;
+            topMovies.appendChild(item);
+        });
+    }
+
+    document.getElementById("analyticsStatus").textContent =
+        `Updated ${new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date())}.`;
+}
+
+async function loadAnalytics() {
+    if (!isAdmin || !gigsSupabase) return;
+
+    const requestId = ++analyticsRefreshId;
+    const status = document.getElementById("analyticsStatus");
+    status.textContent = "Refreshing analytics…";
+
+    try {
+        const { data, error } = await gigsSupabase.rpc("get_gigsflix_analytics");
+        if (!isAdmin || requestId !== analyticsRefreshId) return;
+        if (error) {
+            console.error("Visitor analytics could not be loaded:", error);
+            status.textContent = `Analytics unavailable (${error.message}). Run the updated Supabase setup and authorize your admin account.`;
+            return;
+        }
+        renderAnalytics(data);
+    } catch (error) {
+        if (!isAdmin || requestId !== analyticsRefreshId) return;
+        console.error("Visitor analytics could not be loaded:", error);
+        status.textContent = "Analytics could not be loaded. Check your connection and Supabase setup.";
+    }
+}
+
+function stopAnalyticsRealtime() {
+    if (!gigsSupabase || !analyticsChannel) return;
+    gigsSupabase.removeChannel(analyticsChannel);
+    analyticsChannel = null;
+}
+
+function startAnalyticsRealtime() {
+    if (!gigsSupabase || !isAdmin) return;
+    stopAnalyticsRealtime();
+    analyticsChannel = gigsSupabase
+        .channel("gigsflix-admin-visitor-analytics")
+        .on("postgres_changes", {
+            event: "INSERT",
+            schema: "public",
+            table: "visitor_analytics_events"
+        }, () => {
+            if (isAdmin) loadAnalytics();
+        })
+        .subscribe((status, error) => {
+            if (!isAdmin) return;
+            if (status === "SUBSCRIBED") {
+                document.getElementById("analyticsStatus").textContent = "Live updates connected.";
+                loadAnalytics();
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                console.error("Live visitor analytics connection failed:", error || status);
+                document.getElementById("analyticsStatus").textContent =
+                    "Live connection unavailable. Use Refresh to update.";
+            }
+        });
 }
 
 async function resizePosterFile(posterFile, qualityHeight) {
@@ -1393,15 +1691,20 @@ async function deleteMovie(id) {
     if (!isAdmin) return;
 
     if (confirm("Are you sure you want to delete this movie?")) {
-        const movie = movies.find(item => String(item.id) === String(id));
-        if (movie) await unpublishMovie(movie);
-        await deleteMedia(id);
-        movies = movies.filter(movie => String(movie.id) !== String(id));
-        saveMovies();
-        await renderMovies();
-        startMovieBackdropSlideshow();
-        await renderTopRatedSlideshow();
-        renderAdminMovies();
+        try {
+            const movie = movies.find(item => String(item.id) === String(id));
+            if (movie) await unpublishMovie(movie);
+            await deleteMedia(id);
+            movies = movies.filter(movie => String(movie.id) !== String(id));
+            saveMovies();
+            await renderMovies();
+            startMovieBackdropSlideshow();
+            await renderTopRatedSlideshow();
+            renderAdminMovies();
+        } catch (error) {
+            console.error("Movie could not be deleted:", error);
+            alert("The movie could not be deleted. " + (error.message || "Please try again."));
+        }
     }
 }
 
@@ -1558,6 +1861,8 @@ async function playMovie(id, preview = false) {
     const movie = movies.find(m => m.id === id);
     if (!movie) return;
 
+    analyticsPlaybackMovie = preview ? null : movie;
+    analyticsPlaybackRecorded = false;
     const player = document.getElementById("player");
     const playerError = document.getElementById("playerError");
     const requestId = ++playerRequestId;
@@ -1626,6 +1931,8 @@ function closePlayer() {
     setMovieBackdrop("");
     playerRequestId++;
     previewEndTime = null;
+    analyticsPlaybackMovie = null;
+    analyticsPlaybackRecorded = false;
     const player = document.getElementById("player");
     if (hlsPlayer) {
         hlsPlayer.destroy();
@@ -1645,6 +1952,12 @@ const player = document.getElementById("player");
 const videoStage = document.getElementById("videoStage");
 const fullscreenButton = document.getElementById("fullscreenButton");
 const fitModeButton = document.getElementById("fitModeButton");
+
+player.addEventListener("play", () => {
+    if (!analyticsPlaybackMovie || analyticsPlaybackRecorded) return;
+    analyticsPlaybackRecorded = true;
+    recordVisitorEvent("movie_play", analyticsPlaybackMovie);
+});
 
 function updateFullscreenButton() {
     const isFullscreen = document.fullscreenElement === videoStage ||
@@ -1697,6 +2010,7 @@ player.addEventListener("error", () => {
     playerError.style.display = "block";
 });
 
+startVisitorAnalytics();
 loadPublicMovies()
     .then(loadSharedRatings)
     .catch(error => {
